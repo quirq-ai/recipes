@@ -53,7 +53,7 @@ class Env:
 
     def command(self, action: Action) -> tuple[list[str], dict[str, str], Path]:
         argv = [self.resolve(a, action.target) for a in action.argv]
-        # TODO(expert): pass an allowlist, as REAPI does, for hermeticity. QQ_* settings reach the
+        # TODO(expert): pass an allowlist, as REAPI does, for hermeticity. QQ_PROPERTY_* settings reach the
         # command only through the action's env, which is part of its key.
         env = {k: v for k, v in os.environ.items() if not k.startswith(KEYED_ENV_PREFIX)}
         # A pinned toolchain's executables come first on PATH, so tools it runs find each other.

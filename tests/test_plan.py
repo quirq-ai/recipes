@@ -86,7 +86,7 @@ def test_placeholder_digest_is_not_cacheable(repo):
 def test_qq_settings_are_keyed_into_actions(repo, monkeypatch):
     before = next(p for p in plans(repo, "fetch") if p.target == "lib").actions[0]
     monkeypatch.setenv("QQ_PROPERTY_EXAMPLES", "7")
-    monkeypatch.setenv("UNRELATED_SETTING", "x")
+    monkeypatch.setenv("QQ_TOKEN", "secret")
     after = next(p for p in plans(repo, "fetch") if p.target == "lib").actions[0]
-    assert dict(after.env)["QQ_PROPERTY_EXAMPLES"] == "7" and "UNRELATED_SETTING" not in dict(after.env)
+    assert dict(after.env)["QQ_PROPERTY_EXAMPLES"] == "7" and "QQ_TOKEN" not in dict(after.env)
     assert before.digest() != after.digest()

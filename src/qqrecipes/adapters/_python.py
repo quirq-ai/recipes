@@ -12,10 +12,15 @@ VENV_PYTHON = "{repo}/.qq/venv/bin/python"
 
 
 def pinned_version(ctx: Context) -> str | None:
-    """`3.14.8` (or `3.14`) from the manifest's `[toolchains.python] version`, if pinned."""
-    version = str(ctx.toolchains.get(TOOLCHAIN, {}).get("version", ""))
-    parts = version.split(".")[:3]
-    return ".".join(parts) if len(parts) >= 2 and all(p.isdigit() for p in parts) else None
+    """`3.14.8` from the manifest's `[toolchains.python] version`; `3.14` if only that much is a
+    plain number (`3.14`, `3.14.8rc1`), so the check never silently turns off."""
+    parts = str(ctx.toolchains.get(TOOLCHAIN, {}).get("version", "")).split(".")
+    numeric = []
+    for p in parts[:3]:
+        if not p.isdigit():
+            break
+        numeric.append(p)
+    return ".".join(numeric) if len(numeric) >= 2 else None
 
 
 # Reuse .qq/venv only if this very interpreter made it; otherwise rebuild it from scratch, so a

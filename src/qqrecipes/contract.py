@@ -41,9 +41,10 @@ class State(StrEnum):
     MISSING = "missing"  # a declared state: the kind has no such step
 
 
-# Caller settings named QQ_* (such as property-test bounds) reach an action only through its env, so
-# they are part of its key; the executor drops any other QQ_* variable from the environment.
-KEYED_ENV_PREFIX = "QQ_"
+# Caller settings named QQ_PROPERTY_* (property-test bounds) reach an action only through its env, so
+# they are part of its key; the executor drops them from the ambient environment. Only this prefix, so
+# no other variable (a secret, a machine path) lands in a key or in results.json.
+KEYED_ENV_PREFIX = "QQ_PROPERTY_"
 
 
 def is_placeholder_digest(digest) -> bool:
@@ -94,7 +95,7 @@ class Context:
     repo: Path
     targets: Mapping[str, Target]
     toolchains: Mapping[str, Mapping] = field(default_factory=dict)  # manifest `[toolchains]`
-    env: Mapping[str, str] = field(default_factory=dict)  # the caller's QQ_* settings, keyed into every action
+    env: Mapping[str, str] = field(default_factory=dict)  # the caller's QQ_PROPERTY_* settings, keyed into every action
 
     def input_globs(self, target: Target) -> tuple[str, ...]:
         """The target's own srcs plus those of every target it depends on, transitively."""

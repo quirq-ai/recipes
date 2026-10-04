@@ -119,3 +119,11 @@ def test_venv_is_rebuilt_for_another_interpreter(tmp_path):
     assert out.returncode == 0 and "created" in out.stdout
     again = subprocess.run([sys.executable, "-c", make.argv[2], str(venv_dir)], capture_output=True, text=True)
     assert "reusing" in again.stdout
+
+
+@pytest.mark.parametrize("version,want", [("3.14.8", "3.14.8"), ("3.14", "3.14"), ("3.14.8rc1", "3.14"),
+                                          ("3.14.x", "3.14"), ("3", None), ("", None)])
+def test_pinned_version_falls_back_to_the_minor(version, want):
+    from qqrecipes.adapters import _python
+    from qqrecipes.contract import Context
+    assert _python.pinned_version(Context(repo=EXAMPLE, targets={}, toolchains={"python": {"version": version}})) == want

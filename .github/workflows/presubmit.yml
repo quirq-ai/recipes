@@ -15,7 +15,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       # The CPython the manifests pin (3.14.8), until recipes uses the toolchain quirq-ai/toolchains
-      # publishes (V0-TCH-01). The adapters check the minor version against the manifest.
+      # publishes (V0-TCH-01). The adapters check the full version against the manifest.
       - uses: actions/setup-python@v7
         id: python
         with:

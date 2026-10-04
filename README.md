@@ -50,7 +50,7 @@ loader.load("my-kind").capabilities()     # {"fetch": "missing", "build": "imple
   fingerprint of the recipes code. An action on a toolchain the manifest doesn't pin by a real
   digest (absent, or an all-zero placeholder) is never cacheable, and `results.json` marks a run
   not cacheable when it used the tool on PATH because no `--toolchain` root was given. Today every
-  pin is a placeholder, so nothing is cacheable yet. Caller settings named `QQ_*` reach a command
+  pin is a placeholder, so nothing is cacheable yet. Caller `QQ_PROPERTY_*` settings reach a command
   only through the action's env, so they are part of the key.
   A `srcs` glob that matches no file is an error, not an empty input.
 - **Results.** Every action leaves JUnit XML. A step that writes none (a typecheck, a build) gets a
@@ -103,7 +103,7 @@ input-handling bug in an example and checks a property test catches it; CI runs 
 **Deploy (V0-REC-05).** `qqrecipes execute deploy` builds each target, starts its service action
 on a free port in the canary test environment, waits until its ready path answers (below HTTP 500), runs its HTTP probes
 (status below 400 passes) and always tears it down, killing the whole process group. Ready and
-probe paths must start with a single `/`, and probes follow redirects only within the deployment. Start and
+probe paths must start with a single `/`, and readiness and probes follow redirects only within the deployment. Start and
 each probe are JUnit test cases; `results.json` records the deployment. v0's only backend is
 `local`: on GitHub, the Actions runner. `qqrecipes execute run` starts a service and keeps it up.
 CI deploys and probes both examples, xo-space and innernet.
