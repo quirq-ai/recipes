@@ -123,3 +123,7 @@ through the adapters, and CI also runs xo-space's pytest suite and innernet's bu
 ## Working here
 
 See [AGENTS.md](AGENTS.md). Run the checks with `python -m pytest`.
+
+## Licence
+
+Apache-2.0; see [LICENSE](LICENSE).
