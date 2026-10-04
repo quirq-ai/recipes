@@ -70,6 +70,20 @@ jobs:
         run: >-
           qqrecipes execute test --repo .qq/innernet --manifest .qq/sync/tests/fixtures/innernet.repo.toml
           --out .qq/out/innernet
+      - name: node-app example through the adapter
+        run: qqrecipes execute test --repo examples/node-app --out .qq/out/example-node
+      # V0-REC-04 done-when: a planted input-handling bug in each kind is caught by a property test.
+      # TODO(expert): repeat this in the gate once the merge queue is on (V0-ORG-03).
+      - name: planted bug caught by a Hypothesis property test (python-service, pytest)
+        run: >-
+          python tools/check_planted_bug.py examples/python-service greet.py
+          'name = " ".join(name.split())[:64] or "there"' 'name = name.strip()[:64] or "there"'
+          test_greeting_is_one_bounded_line
+          -- --toolchain python="$(dirname "$(dirname "${{ steps.python.outputs.python-path }}")")"
+      - name: planted bug caught by a fast-check property test (node-app)
+        run: >-
+          python tools/check_planted_bug.py examples/node-app lib/slug.ts
+          '.replace(/^-+|-+$/g, "")' '' 'always gives a safe, bounded slug'
       - uses: actions/upload-artifact@v7
         if: always()
         with:

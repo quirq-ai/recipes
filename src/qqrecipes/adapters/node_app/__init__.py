@@ -3,6 +3,8 @@
 Steps come from package.json: `build` runs the `build` script; `test` runs the `typecheck` script
 (or `tsc --noEmit` when there is a tsconfig.json but no such script), then the `test` script if
 there is one. A test runner that writes JUnit gets it under {out}; vitest is wired automatically.
+fast-check property tests (V0-REC-04) run inside vitest as ordinary tests; when the app depends on
+fast-check, `qq_property_setup.mjs` configures it with a fixed seed and a time limit first.
 
 params (all optional):
     dir           the app directory, relative to the repo root (default ".")
@@ -91,10 +93,15 @@ class NodeApp(Adapter):
                                        workdir=app, env=self._env(target)))
         if "vitest" in deps:
             junit = f"{{out}}/junit/{target.name}.vitest.xml"
-            actions.append(self.action(
-                target, ctx, "test", "vitest",
-                [PNPM, "exec", "vitest", "run", "--reporter=default", "--reporter=junit",
-                 f"--outputFile.junit={junit}"], workdir=app, env=self._env(target), junit=junit))
+            argv = [PNPM, "exec", "vitest", "run", "--reporter=default", "--reporter=junit",
+                    f"--outputFile.junit={junit}"]
+            if "fast-check" in deps:
+                # Property tests run as ordinary tests, deterministic and time-boxed (V0-REC-04).
+                actions.append(self.action(target, ctx, "test", "property-setup",
+                                           [NODE, "{adapter}/qq_property_setup.mjs"], workdir=app))
+                argv += ["--config", ".qq/vitest.config.mjs"]
+            actions.append(self.action(target, ctx, "test", "vitest", argv, workdir=app,
+                                       env=self._env(target), junit=junit))
         elif "test" in scripts:
             actions.append(self.action(target, ctx, "test", "test", [PNPM, "run", "test"], workdir=app,
                                        env=self._env(target)))

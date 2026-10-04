@@ -20,5 +20,8 @@ qqrecipes = "qqrecipes.cli:main"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+qqrecipes = ["adapters/*/*.mjs"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
