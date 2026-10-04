@@ -12,8 +12,9 @@ from __future__ import annotations
 
 import json
 import math
-import statistics
 import time
+import urllib.error
+import urllib.request
 from dataclasses import dataclass, field
 from pathlib import Path
 from xml.etree import ElementTree as ET
@@ -45,14 +46,29 @@ class BenchResult:
         }
 
 
+def timed_get(url: str, timeout: float = 30.0) -> tuple[int | None, str, float]:
+    """GET url and read the whole body; seconds include the body, so a streamed page counts in full
+    (service.get, used for probes, stops at the headers)."""
+    started = time.monotonic()
+    try:
+        with urllib.request.urlopen(urllib.request.Request(url, method="GET"), timeout=timeout) as r:
+            r.read()
+            return r.status, "", time.monotonic() - started
+    except urllib.error.HTTPError as e:
+        return e.code, str(e.reason), time.monotonic() - started
+    except (urllib.error.URLError, OSError) as e:
+        return None, str(getattr(e, "reason", e)), time.monotonic() - started
+
+
 def nearest_rank(values: list[float], pct: float) -> float:
+    """Nearest-rank percentile: always one of the samples. With few samples p90 is the max."""
     ordered = sorted(values)
     return ordered[max(math.ceil(pct / 100 * len(ordered)) - 1, 0)]
 
 
 def summarize(name: str, samples: list[float], unit: str) -> dict[str, dict]:
     return {
-        f"{name}_p50": {"value": round(statistics.median(samples), 4), "unit": unit},
+        f"{name}_p50": {"value": round(nearest_rank(samples, 50), 4), "unit": unit},
         f"{name}_p90": {"value": round(nearest_rank(samples, 90), 4), "unit": unit},
         f"{name}_min": {"value": round(min(samples), 4), "unit": unit},
         f"{name}_max": {"value": round(max(samples), 4), "unit": unit},
@@ -67,17 +83,25 @@ def _startup(res: BenchResult, env: Env, backend: str) -> None:
         dep = service.start(res.action, env, backend, poll_s=POLL_S)
         took = time.monotonic() - started
         try:
-            res.logs.append(str(dep.log))
             if not dep.ready:
                 res.detail = f"start {i + 1}: {dep.ready_detail}"
                 return
         finally:
             service.stop(dep)
+            res.logs.append(str(_keep_log(dep.log, i + 1)))
         if i >= b.warmup:
             res.samples.append(took)
     res.unit = "s"
     res.metrics = summarize("startup", res.samples, "s")
     res.ok, res.detail = True, f"{b.samples} start(s), p50 {res.metrics['startup_p50']['value']}s"
+
+
+def _keep_log(log: Path, n: int) -> Path:
+    """Each start rewrites the service log; keep start n's under its own name."""
+    kept = log.with_name(f"{log.stem}.start{n}{log.suffix}")
+    if log.exists():
+        log.replace(kept)
+    return kept
 
 
 def _latency(res: BenchResult, env: Env, backend: str) -> None:
@@ -90,9 +114,8 @@ def _latency(res: BenchResult, env: Env, backend: str) -> None:
             return
         for i in range(b.warmup + b.samples):
             for path in b.paths:
-                started = time.monotonic()
-                status, detail = service.get(dep.url + path)
-                took_ms = (time.monotonic() - started) * 1000
+                status, detail, took = timed_get(dep.url + path)
+                took_ms = took * 1000
                 if status is None or status >= 400:
                     res.detail = f"GET {path} answered {status if status is not None else detail}"
                     return

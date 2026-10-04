@@ -1,5 +1,6 @@
 import json
 import sys
+from pathlib import Path
 from xml.etree import ElementTree as ET
 
 import pytest
@@ -26,6 +27,7 @@ def test_startup_samples_every_start(tmp_path):
     assert res.metrics["startup_min"]["value"] <= res.metrics["startup_p50"]["value"] <= res.metrics["startup_max"]["value"]
     data = json.loads((tmp_path / "out/bench/web.bench.serve.json").read_text())
     assert data["measure"] == "startup" and data["samples"] == res.samples and data["ok"]
+    assert len(set(res.logs)) == 4 and all(Path(log).exists() for log in res.logs)  # one per start, warmup too
     suite = ET.parse(tmp_path / "out/junit/web.bench.serve.xml").getroot()
     assert suite.get("failures") == "0" and suite.find("testcase").get("name") == "bench:startup"
 
@@ -71,9 +73,12 @@ def target(params):
 
 def test_bench_params_defaults_and_values():
     assert Bench.from_params(target({}), measure="latency", path="/health") == Bench("latency", ("/health",), 5, 1)
-    spec = Bench.from_params(target({"bench": {"measure": "startup", "paths": ["/a", "/b?q=x"], "samples": 9,
-                                               "warmup": 0}}), measure="latency", path="/")
-    assert spec == Bench("startup", ("/a", "/b?q=x"), 9, 0)
+    spec = Bench.from_params(target({"bench": {"measure": "latency", "paths": ["/a", "/b?q=x"], "samples": 9,
+                                               "warmup": 0}}), measure="startup", path="/")
+    assert spec == Bench("latency", ("/a", "/b?q=x"), 9, 0)
+    assert Bench.from_params(target({"bench": {"measure": "startup"}}), measure="latency", path="/up").paths == ("/up",)
+    with pytest.raises(ContractError, match="startup times the ready path"):
+        Bench.from_params(target({"bench": {"measure": "startup", "paths": ["/a"]}}), measure="latency", path="/")
 
 
 @pytest.mark.parametrize("raw, match", [
@@ -83,3 +88,27 @@ def test_bench_params_defaults_and_values():
 def test_bad_bench_params(raw, match):
     with pytest.raises(ContractError, match=match):
         Bench.from_params(target({"bench": raw}), measure="latency", path="/")
+
+
+def test_timed_get_reads_the_whole_body(tmp_path):
+    import http.server
+    import threading
+
+    class Slow(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(b"head")
+            self.wfile.flush()
+            import time
+            time.sleep(0.3)
+            self.wfile.write(b"tail")
+
+        def log_message(self, *a):
+            pass
+
+    srv = http.server.HTTPServer(("127.0.0.1", 0), Slow)
+    threading.Thread(target=srv.handle_request, daemon=True).start()
+    status, _, took = bench.timed_get(f"http://127.0.0.1:{srv.server_port}/")
+    srv.server_close()
+    assert status == 200 and took >= 0.3

@@ -117,7 +117,7 @@ class Bench:
     """Marks a service action as a benchmark (`bench`) and says what to measure (V0-PRF-01).
 
     startup  seconds from starting the service until its ready path answers, over `samples` starts
-    latency  milliseconds per GET of each of `paths` once the service is ready, `samples` rounds
+    latency  milliseconds per GET of each of `paths` (whole body) once ready, `samples` rounds
 
     The first `warmup` starts or rounds are not counted. Numbers are raw: quirq-ai/perf stores
     them with units and the runner type, and comparing them is v1's job.
@@ -142,6 +142,8 @@ class Bench:
         measure = raw.get("measure", measure)
         if measure not in MEASURES:
             raise ContractError(f"{where}.measure is {measure!r}; one of {', '.join(MEASURES)}")
+        if measure == "startup" and "paths" in raw:
+            raise ContractError(f"{where}.paths is for latency; startup times the ready path")
         paths = raw.get("paths", [path])
         if not isinstance(paths, list) or not paths or not all(
                 isinstance(p, str) and p.startswith("/") for p in paths):
