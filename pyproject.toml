@@ -8,8 +8,8 @@ version = "0.1.0"
 description = "Adapters per target kind, one loader, and REAPI-shaped actions, for quirq infra (qq)."
 readme = "README.md"
 requires-python = ">=3.11"
-# sync is used by pinned commit (V0-SYN-01, quirq-ai/sync#2). TODO(expert): let rollers move this pin.
-dependencies = ["qqsync @ git+https://github.com/quirq-ai/sync@5abac76af194a40961074ce75432f4fdb79fe951"]
+# sync is used by pinned commit (main after V0-SYN-04, quirq-ai/sync#5); depot pins the same one. TODO(expert): let rollers move this pin.
+dependencies = ["qqsync @ git+https://github.com/quirq-ai/sync@8f624f4a7fe3abdab2c7b83376f1ae7772073fd4"]
 
 [project.optional-dependencies]
 test = ["pytest==9.1.1"]
@@ -19,6 +19,9 @@ qqrecipes = "qqrecipes.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+qqrecipes = ["adapters/*/*.mjs"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -1,0 +1,23 @@
+{
+  "name": "qq-example-node-app",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A minimal Next.js app that quirq infra's node-app adapter builds, tests and deploys in CI.",
+  "scripts": {
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "next": "16.3.8",
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.4",
+    "@types/react": "19.3.0",
+    "fast-check": "4.10.2",
+    "typescript": "5.9.3",
+    "vitest": "5.0.3"
+  }
+}

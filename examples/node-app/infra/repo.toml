@@ -1,0 +1,16 @@
+# A minimal node-app (Next.js, pnpm) repo, built, tested and deployed through the adapter in CI.
+schema = "quirq-repo/1"
+
+[qq]
+version = "0.1.0"
+
+[toolchains.node]
+version = "24"       # placeholder digest until quirq-ai/toolchains publishes Node (V0-TCH-02)
+platforms."linux-x86_64" = { source = "https://github.com/quirq-ai/toolchains/releases/download/node-24/node-24-linux-x86_64.tar.zst", digest = "sha256:0000000000000000000000000000000000000000000000000000000000000000" }
+
+[[targets]]
+name = "app"
+kind = "node-app"
+srcs = ["app/**", "lib/**", "package.json", "pnpm-lock.yaml", "tsconfig.json", "next.config.ts"]
+outs = [".next/"]
+params = { ready_path = "/health", probes = ["/health", "/", "/api/slug?title=Hello%20qq"] }

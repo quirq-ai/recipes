@@ -75,8 +75,8 @@ Plan and every v0 item: [quirq-ai/infra-config](https://github.com/quirq-ai/infr
 |---|---|---|---|
 | V0-REC-01 | Adapter contract and loader | #2 | merged |
 | V0-REC-02 | `python-service` and `pytest` adapters | #3 | merged |
-| V0-REC-03 | `node-app` adapter (Next.js) | #4 | in review |
-| V0-REC-04 | Property tests in `test` | | not started |
+| V0-REC-03 | `node-app` adapter (Next.js) | #4 | merged |
+| V0-REC-04 | Property tests in `test` | #5 | in review |
 | V0-REC-05 | `deploy` to a canary test environment | | not started |
 
 ## Adapters
@@ -86,6 +86,15 @@ Plan and every v0 item: [quirq-ai/infra-config](https://github.com/quirq-ai/infr
 | `python-service` | fetch, build, run, deploy | python | venv in `.qq/venv` from the pinned CPython; build byte-compiles srcs; run/deploy emit a service action for `params.entry` listening on `$PORT` (`params.port_env`), which `deploy` starts and probes (V0-REC-05) |
 | `pytest` | fetch, test | python | installs `requirements-dev.txt`; writes JUnit XML to `{out}/junit/<target>.pytest.xml` |
 | `node-app` | fetch, build, test, run, deploy | node (bundles pnpm) | `pnpm install --frozen-lockfile`; build runs the `build` script; test runs `typecheck` (or `tsc --noEmit`), then vitest with JUnit or the `test` script; run/deploy use `next start` |
+
+**Property tests (V0-REC-04).** Hypothesis (Python) and fast-check (TypeScript) tests run as
+ordinary tests in `test`, deterministic and time-boxed: the pytest adapter loads its
+`qq_hypothesis` plugin (derandomized, no example database, 100 examples, no per-example deadline,
+unless the repo picked its own profile), and the node-app adapter runs vitest with fast-check
+configured globally (seed 42, 100 runs, 5 s per property). A property cut short by its time limit
+passes with fewer runs, so a slow runner explores less. `QQ_PROPERTY_*` variables override the
+bounds; the test action's timeout bounds the whole run. `tools/check_planted_bug.py` plants an
+input-handling bug in an example and checks a property test catches it; CI runs it for both kinds.
 
 Each adapter's docstring lists its `params`. `examples/` holds small repos that CI builds and tests
 through the adapters, and CI also runs xo-space's pytest suite and innernet's build and typecheck through them.
