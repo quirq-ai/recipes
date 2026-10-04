@@ -3,23 +3,26 @@
     qqrecipes kinds [--json]                         every kind with an adapter, and its capabilities
     qqrecipes check-kinds --infra-config DIR         adapters agree with infra-config's kinds.toml
     qqrecipes plan GOAL [--target T]... [--json]     the actions a goal needs, without running them
-    qqrecipes execute GOAL [--target T]... [--out DIR] [--toolchain NAME=ROOT]...
+    qqrecipes execute GOAL [--target T]... [--out DIR] [--toolchain NAME=ROOT]... [--backend local]
 
 GOAL is a capability. The manifest is read through qqsync (default `infra/repo.toml` in --repo).
 `execute` is the local stand-in for remote-build's executor (V0-RBE-01) and for `qq build` and
-`qq test` (V0-DEP-03); it writes JUnit XML, logs and `results.json` under --out.
+`qq test` (V0-DEP-03); it writes JUnit XML, logs and `results.json` under --out. With GOAL
+`deploy`, each service is started in the canary test environment (--backend), probed and torn
+down (V0-REC-05); with GOAL `run`, it is started and kept up until interrupted.
 """
 from __future__ import annotations
 
 import argparse
 import json
+import signal
 import sys
 from pathlib import Path
 
 from qqsync.errors import ManifestError
 from qqsync.manifest import load as load_manifest
 
-from qqrecipes import loader, runner
+from qqrecipes import loader, runner, service
 from qqrecipes.contract import CAPABILITIES, ContractError, State
 from qqrecipes.plan import plan
 
@@ -105,7 +108,12 @@ def parse_toolchains(values: list[str]) -> dict[str, Path]:
     return out
 
 
+def _cancelled(signum, frame):
+    raise SystemExit(128 + signum)  # unwinds through deploy teardown, as Ctrl-C does
+
+
 def cmd_execute(args) -> int:
+    signal.signal(signal.SIGTERM, _cancelled)  # a cancelled CI job still tears services down
     plans = _plans(args)
     repo = Path(args.repo).resolve()
     out = Path(args.out).resolve() if args.out else repo / ".qq" / "out"
@@ -118,30 +126,59 @@ def cmd_execute(args) -> int:
     env = runner.Env(repo=repo, out=out, toolchains=parse_toolchains(args.toolchain),
                      adapter_dirs=adapter_dirs)
     records, failed, skipped = [], False, 0
-    for p in plans:
-        if p.state is State.MISSING:
-            print(f"-    {p.target} {p.capability}: missing (declared)")
-            records.append({"target": p.target, "capability": p.capability, "state": "missing"})
-            continue
-        for a in p.actions:
-            if failed and not args.keep_going:
-                break
-            if a.service is not None:
-                print(f"skip {a.target} {a.capability}:{a.name}: a service; start it with deploy (V0-REC-05)")
-                skipped += 1
+    try:
+        for p in plans:
+            if p.state is State.MISSING:
+                print(f"-    {p.target} {p.capability}: missing (declared)")
+                records.append({"target": p.target, "capability": p.capability, "state": "missing"})
                 continue
-            r = runner.run(a, env)
-            failed |= not r.ok
-            print(f"{'PASS' if r.ok else 'FAIL'} {a.target} {a.capability}:{a.name}"
-                  f" ({r.duration_s:.1f}s){'' if r.ok else f'  log: {r.log}'}")
-            records.append({**a.to_json(), "exit_code": r.exit_code, "duration_s": round(r.duration_s, 3),
-                            "output_digests": r.output_digests, "junit": str(r.junit), "log": str(r.log)})
-    out.mkdir(parents=True, exist_ok=True)
-    (out / "results.json").write_text(json.dumps(records, indent=2) + "\n")
+            for a in p.actions:
+                if failed and not args.keep_going:
+                    break
+                if a.service is not None and a.capability == "deploy" == args.goal:
+                    dep = service.deploy_and_probe(a, env, args.backend)
+                    failed |= not dep.ok
+                    print(f"{'PASS' if dep.ok else 'FAIL'} {a.target} deploy:{a.name} on {args.backend}"
+                          f" ({dep.ready_detail}; {sum(p.ok for p in dep.probes)}/{len(dep.probes)} probes;"
+                          f" {dep.stopped}){'' if dep.ok else f'  log: {dep.log}'}")
+                    records.append({**a.to_json(), "deployment": dep.to_json()})
+                    continue
+                if a.service is not None and a.capability == "run" == args.goal:
+                    failed |= not serve_foreground(a, env, args.backend)
+                    continue
+                if a.service is not None:
+                    print(f"skip {a.target} {a.capability}:{a.name}: a service; start it with deploy or run")
+                    skipped += 1
+                    continue
+                r = runner.run(a, env)
+                failed |= not r.ok
+                print(f"{'PASS' if r.ok else 'FAIL'} {a.target} {a.capability}:{a.name}"
+                      f" ({r.duration_s:.1f}s){'' if r.ok else f'  log: {r.log}'}")
+                records.append({**a.to_json(), "exit_code": r.exit_code, "duration_s": round(r.duration_s, 3),
+                                "output_digests": r.output_digests, "junit": str(r.junit), "log": str(r.log)})
+    finally:  # also on cancel, so a cancelled job still leaves a record
+        out.mkdir(parents=True, exist_ok=True)
+        (out / "results.json").write_text(json.dumps(records, indent=2) + "\n")
     if skipped and args.goal in ("run", "deploy"):
         print(f"qqrecipes: {skipped} service action(s) not started", file=sys.stderr)
         return 1
     return 1 if failed else 0
+
+
+def serve_foreground(action, env, backend: str) -> bool:
+    dep = service.start(action, env, backend)
+    if not dep.ready:
+        print(f"FAIL {action.target} run:{action.name}: {dep.ready_detail}  log: {dep.log}")
+        service.stop(dep)
+        return False
+    print(f"{action.target} is up at {dep.url} (log: {dep.log}); Ctrl-C stops it", flush=True)
+    try:
+        dep.process.wait()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        service.stop(dep)
+    return True
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -166,6 +203,8 @@ def main(argv: list[str] | None = None) -> int:
     e.add_argument("--toolchain", action="append", default=[], metavar="NAME=ROOT",
                    help="use the toolchain unpacked at ROOT (executables in ROOT/bin); default: PATH")
     e.add_argument("--keep-going", action="store_true", help="run every action even after a failure")
+    e.add_argument("--backend", choices=service.BACKENDS, default="local",
+                   help="where deploy starts services (v0: this machine, e.g. the CI runner)")
     args = ap.parse_args(argv)
     try:
         return args.func(args)
