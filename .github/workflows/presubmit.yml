@@ -11,12 +11,15 @@ permissions:
 jobs:
   presubmit:
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v7
+      # The CPython the manifests pin (3.14.8), until recipes uses the toolchain quirq-ai/toolchains
+      # publishes (V0-TCH-01). The adapters check the minor version against the manifest.
       - uses: actions/setup-python@v7
+        id: python
         with:
-          python-version: "3.14"
+          python-version: "3.14.8"
       - run: python -m pip install --quiet -e ".[test]"
       - run: python -m pytest -q -p no:cacheprovider
       - name: agnosticism guard (plan §5.1)
@@ -30,3 +33,29 @@ jobs:
       - run: python -m pip install --quiet -r .qq/infra-config/requirements.txt
       - name: adapters match infra-config kinds.toml
         run: qqrecipes check-kinds --infra-config .qq/infra-config
+      - name: python-service example through the adapters
+        run: >-
+          qqrecipes execute test --repo examples/python-service --out .qq/out/example-python
+          --toolchain python="$(dirname "$(dirname "${{ steps.python.outputs.python-path }}")")"
+      # V0-REC-02 done-when: xo-space builds and tests through the adapter. Its manifest is sync's
+      # onboarding fixture until V0-ONB-01 lands infra/repo.toml in xo-space.
+      - uses: actions/checkout@v7
+        with:
+          repository: quirq-ai/xo-space
+          ref: c3cea98c8e70479b1f0cb8f871e28f8f6ee5a4f6  # TODO(expert): let rollers move this pin.
+          path: .qq/xo-space
+      - uses: actions/checkout@v7
+        with:
+          repository: quirq-ai/sync
+          ref: 5abac76af194a40961074ce75432f4fdb79fe951
+          path: .qq/sync
+      - name: xo-space builds and tests through the adapters
+        run: >-
+          qqrecipes execute test --repo .qq/xo-space --manifest .qq/sync/tests/fixtures/xo-space.repo.toml
+          --out .qq/out/xo-space --toolchain python="$(dirname "$(dirname "${{ steps.python.outputs.python-path }}")")"
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: results
+          path: .qq/out/
+          if-no-files-found: ignore

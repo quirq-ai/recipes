@@ -73,11 +73,21 @@ Plan and every v0 item: [quirq-ai/infra-config](https://github.com/quirq-ai/infr
 
 | Item | What | PR | State |
 |---|---|---|---|
-| V0-REC-01 | Adapter contract and loader | #2 | in review |
-| V0-REC-02 | `python-service` and `pytest` adapters | | not started |
+| V0-REC-01 | Adapter contract and loader | #2 | merged |
+| V0-REC-02 | `python-service` and `pytest` adapters | #3 | in review |
 | V0-REC-03 | `node-app` adapter (Next.js) | | not started |
 | V0-REC-04 | Property tests in `test` | | not started |
 | V0-REC-05 | `deploy` to a canary test environment | | not started |
+
+## Adapters
+
+| Kind | Capabilities | Toolchain | Notes |
+|---|---|---|---|
+| `python-service` | fetch, build, run, deploy | python | venv in `.qq/venv` from the pinned CPython; build byte-compiles srcs; run/deploy emit a service action for `params.entry` listening on `$PORT` (`params.port_env`), which `deploy` starts and probes (V0-REC-05) |
+| `pytest` | fetch, test | python | installs `requirements-dev.txt`; writes JUnit XML to `{out}/junit/<target>.pytest.xml` |
+
+Each adapter's docstring lists its `params`. `examples/` holds small repos that CI builds and tests
+through the adapters, and CI also runs xo-space's pytest suite through them.
 
 ## Working here
 
