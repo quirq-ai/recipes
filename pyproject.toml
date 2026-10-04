@@ -8,6 +8,8 @@ version = "0.1.0"
 description = "Adapters per target kind, one loader, and REAPI-shaped actions, for quirq infra (qq)."
 readme = "README.md"
 requires-python = ">=3.11"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
 # sync is used by pinned commit (main after V0-SYN-04, quirq-ai/sync#5); depot pins the same one. TODO(expert): let rollers move this pin.
 dependencies = ["qqsync @ git+https://github.com/quirq-ai/sync@9f4c77ebe2c81d6ffd643d737a35b962f6fd322a"]
 
