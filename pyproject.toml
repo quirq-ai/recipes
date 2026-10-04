@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=80"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "qqrecipes"
+version = "0.1.0"
+description = "Adapters per target kind, one loader, and REAPI-shaped actions, for quirq infra (qq)."
+readme = "README.md"
+requires-python = ">=3.11"
+# sync is used by pinned commit (V0-SYN-01, quirq-ai/sync#2). TODO(expert): let rollers move this pin.
+dependencies = ["qqsync @ git+https://github.com/quirq-ai/sync@5abac76af194a40961074ce75432f4fdb79fe951"]
+
+[project.optional-dependencies]
+test = ["pytest==9.1.1"]
+
+[project.scripts]
+qqrecipes = "qqrecipes.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
