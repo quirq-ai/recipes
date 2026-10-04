@@ -42,7 +42,7 @@ def actions(plans, target, capability):
 
 def test_capabilities_match_kinds_toml():
     implemented = lambda k: {c for c, s in loader.load(k).capabilities().items() if s is State.IMPLEMENTED}
-    assert implemented("python-service") == {"fetch", "build", "run", "deploy"}
+    assert implemented("python-service") == {"fetch", "build", "run", "deploy", "bench"}
     assert implemented("pytest") == {"fetch", "test"}
 
 
@@ -119,6 +119,14 @@ def test_venv_is_rebuilt_for_another_interpreter(tmp_path):
     assert out.returncode == 0 and "created" in out.stdout
     again = subprocess.run([sys.executable, "-c", make.argv[2], str(venv_dir)], capture_output=True, text=True)
     assert "reusing" in again.stdout
+
+
+def test_bench_plan_is_a_startup_bench_of_the_service():
+    plans = plan(manifest('params = { ready_path = "/health" }'), "bench", EXAMPLE, ["server"])
+    assert [p.capability for p in plans] == ["fetch", "build", "bench"]
+    a = actions(plans, "server", "bench").actions[0]
+    assert a.service is not None and a.bench.measure == "startup" and a.bench.paths == ("/health",)
+    assert not a.cacheable and a.to_json()["bench"]["samples"] == 5
 
 
 @pytest.mark.parametrize("version,want", [("3.14.8", "3.14.8"), ("3.14", "3.14"), ("3.14.8rc1", "3.14"),

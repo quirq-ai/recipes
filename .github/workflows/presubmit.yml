@@ -29,7 +29,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           repository: quirq-ai/infra-config
-          ref: 87fef5f89104c91822068280f6949fa36d5eee0f  # TODO(expert): let rollers move this pin.
+          ref: a698da40d6ef9a3d79ccd9393417f094ec935123  # TODO(expert): let rollers move this pin.
           path: .qq/infra-config
       - run: python -m pip install --quiet -r .qq/infra-config/requirements.txt
       - name: adapters match infra-config kinds.toml
@@ -95,6 +95,13 @@ jobs:
         run: |
           qqrecipes execute deploy --repo examples/node-app --out .qq/out/deploy-example-node
           qqrecipes execute deploy --repo .qq/innernet --manifest .qq/sync/tests/fixtures/innernet.repo.toml --out .qq/out/deploy-innernet
+      # V0-PRF-01: the bench capability measures both kinds: start-up time of the python-service
+      # example and request latency of the node-app example. The numbers land in .qq/out/bench-*/bench.
+      - name: bench python-service and node-app examples
+        run: |
+          qqrecipes execute bench --repo examples/python-service --target server --out .qq/out/bench-example-python --toolchain python="$(dirname "$(dirname "${{ steps.python.outputs.python-path }}")")"
+          qqrecipes execute bench --repo examples/node-app --out .qq/out/bench-example-node
+          cat .qq/out/bench-example-python/bench/*.json .qq/out/bench-example-node/bench/*.json
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         if: always()
         with:
