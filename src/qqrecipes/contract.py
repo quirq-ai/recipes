@@ -129,7 +129,16 @@ class Service:
 
     ready_path: str = "/"
     ready_timeout_s: int = 180
-    probes: tuple[str, ...] = ("/",)  # paths that must answer below HTTP 500 once ready
+    probes: tuple[str, ...] = ("/",)  # paths that must answer below HTTP 400 once ready
+
+    def __post_init__(self):
+        # The path is appended to the deployment's own URL, so it must stay a path on that host:
+        # "@example.com/" or "//example.com/" would point readiness and probes somewhere else.
+        for path in (self.ready_path, *self.probes):
+            if not isinstance(path, str) or not path.startswith("/") or path.startswith("//") \
+                    or any(ch.isspace() or ch == "\\" for ch in path):
+                raise ContractError(f"service path {path!r} must be a path on the service, starting with"
+                                    f" a single '/' and holding no whitespace or backslash")
 
 
 @dataclass(frozen=True)
