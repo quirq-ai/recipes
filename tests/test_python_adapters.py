@@ -49,10 +49,10 @@ def test_capabilities_match_kinds_toml():
 def test_test_goal_plan():
     plans = plan(manifest(), "test", EXAMPLE)
     fetch = actions(plans, "server", "fetch").actions
-    assert [a.name for a in fetch] == ["toolchain-check", "venv", "install"]
+    assert [a.name for a in fetch] == ["toolchain-check", "venv", "venv-check", "install"]
     assert fetch[0].argv[0] == "{toolchain:python}python3" and "'3.14'" in fetch[0].argv[2]
-    assert fetch[2].argv[-1] == "requirements.txt"
-    assert actions(plans, "tests", "fetch").actions[2].argv[-1] == "requirements-dev.txt"
+    assert fetch[3].argv[-1] == "requirements.txt"
+    assert actions(plans, "tests", "fetch").actions[3].argv[-1] == "requirements-dev.txt"
     build = actions(plans, "server", "build").actions[0]
     assert build.argv[-2:] == ("server.py", "greet.py")  # requirements.txt is not compiled
     test = actions(plans, "tests", "test").actions[0]
@@ -101,3 +101,16 @@ def test_toolchain_check_runs(tmp_path, version, ok):
     if not Path(argv[0]).exists():
         pytest.skip(f"{argv[0]} not present in this interpreter's prefix")
     assert (subprocess.run(argv, env=environ, cwd=cwd).returncode == 0) is ok
+
+
+def test_venv_is_rebuilt_for_another_interpreter(tmp_path):
+    fetch = actions(plan(manifest(version=f"{sys.version_info[0]}.{sys.version_info[1]}.0"), "fetch",
+                         EXAMPLE, ["server"]), "server", "fetch").actions
+    make = next(a for a in fetch if a.name == "venv")
+    venv_dir = tmp_path / "venv"
+    subprocess.run(["/bin/sh", "-c", f"mkdir -p {venv_dir}/bin && ln -s /bin/true {venv_dir}/bin/python && "
+                    f"echo 'executable = /somewhere/else/python3' > {venv_dir}/pyvenv.cfg"], check=True)
+    out = subprocess.run([sys.executable, "-c", make.argv[2], str(venv_dir)], capture_output=True, text=True)
+    assert out.returncode == 0 and "created" in out.stdout
+    again = subprocess.run([sys.executable, "-c", make.argv[2], str(venv_dir)], capture_output=True, text=True)
+    assert "reusing" in again.stdout

@@ -14,11 +14,12 @@ jobs:
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v7
-      # The pinned CPython (infra-config kinds.toml) until quirq-ai/toolchains publishes it (V0-TCH-01).
+      # The CPython the manifests pin (3.14.8), until recipes uses the toolchain quirq-ai/toolchains
+      # publishes (V0-TCH-01). The adapters check the minor version against the manifest.
       - uses: actions/setup-python@v7
         id: python
         with:
-          python-version: "3.14"
+          python-version: "3.14.8"
       - run: python -m pip install --quiet -e ".[test]"
       - run: python -m pytest -q -p no:cacheprovider
       - name: agnosticism guard (plan §5.1)
