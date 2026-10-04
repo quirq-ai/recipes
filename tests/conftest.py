@@ -21,7 +21,7 @@ def repo(tmp_path: Path) -> Path:
         [toolchains.sh]
         version = "1"
         source = "https://example.invalid/sh.tar"
-        digest = "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        digest = "sha256:5ca1ab1e00000000000000000000000000000000000000000000000000000001"
         [[targets]]
         name = "lib"
         kind = "shell-tool"

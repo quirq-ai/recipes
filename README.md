@@ -47,7 +47,11 @@ loader.load("my-kind").capabilities()     # {"fetch": "missing", "build": "imple
   it uses, and where it writes JUnit XML. `Action.digest()` is the cache key. Commands hold
   placeholders such as `{toolchain:NAME}` and `{out}` that the executor resolves, so the digest is
   the same on every machine of the same platform. The key also holds the platform and a
-  fingerprint of the recipes code; an action on an unpinned (ambient) toolchain is never cacheable.
+  fingerprint of the recipes code. An action on a toolchain the manifest doesn't pin by a real
+  digest (absent, or an all-zero placeholder) is never cacheable, and `results.json` marks a run
+  not cacheable when it used the tool on PATH because no `--toolchain` root was given. Today every
+  pin is a placeholder, so nothing is cacheable yet. Caller settings named `QQ_*` reach a command
+  only through the action's env, so they are part of the key.
   A `srcs` glob that matches no file is an error, not an empty input.
 - **Results.** Every action leaves JUnit XML. A step that writes none (a typecheck, a build) gets a
   one-case report from its exit code, so the result sink (V0-TST-01) sees every step.
@@ -93,7 +97,7 @@ ordinary tests in `test`, deterministic and time-boxed: the pytest adapter loads
 unless the repo picked its own profile), and the node-app adapter runs vitest with fast-check
 configured globally (seed 42, 100 runs, 5 s per property). A property cut short by its time limit
 passes with fewer runs, so a slow runner explores less. `QQ_PROPERTY_*` variables override the
-bounds; the test action's timeout bounds the whole run. `tools/check_planted_bug.py` plants an
+bounds (and so change the action key); the test action's timeout bounds the whole run. `tools/check_planted_bug.py` plants an
 input-handling bug in an example and checks a property test catches it; CI runs it for both kinds.
 
 **Deploy (V0-REC-05).** `qqrecipes execute deploy` builds each target, starts its service action

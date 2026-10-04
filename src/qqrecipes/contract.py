@@ -41,6 +41,23 @@ class State(StrEnum):
     MISSING = "missing"  # a declared state: the kind has no such step
 
 
+# Caller settings named QQ_* (such as property-test bounds) reach an action only through its env, so
+# they are part of its key; the executor drops any other QQ_* variable from the environment.
+KEYED_ENV_PREFIX = "QQ_"
+
+
+def is_placeholder_digest(digest) -> bool:
+    """An all-zero digest stands in for a toolchain not published yet: it pins nothing."""
+    hexpart = str(digest).split(":", 1)[-1]
+    return not hexpart or set(hexpart) == {"0"}
+
+
+def _digests(pin) -> list:
+    if isinstance(pin, Mapping):
+        return [v for k, v in pin.items() if k == "digest"] + [d for v in pin.values() for d in _digests(v)]
+    return []
+
+
 class ContractError(Exception):
     """An adapter broke the contract. The message names the adapter and what to fix."""
 
@@ -77,6 +94,7 @@ class Context:
     repo: Path
     targets: Mapping[str, Target]
     toolchains: Mapping[str, Mapping] = field(default_factory=dict)  # manifest `[toolchains]`
+    env: Mapping[str, str] = field(default_factory=dict)  # the caller's QQ_* settings, keyed into every action
 
     def input_globs(self, target: Target) -> tuple[str, ...]:
         """The target's own srcs plus those of every target it depends on, transitively."""
@@ -98,6 +116,11 @@ class Context:
         if pin is None:
             return "ambient"
         return json.dumps(pin, sort_keys=True, separators=(",", ":"))
+
+    def toolchain_pinned(self, name: str) -> bool:
+        """True only if the manifest pins the toolchain by real digests (none missing or all-zero)."""
+        digests = _digests(self.toolchains.get(name))
+        return bool(digests) and not any(is_placeholder_digest(d) for d in digests)
 
 
 @dataclass(frozen=True)
@@ -225,8 +248,9 @@ class Adapter:
                env: Mapping[str, str] | None = None, toolchains=(), **kw) -> Action:
         """Build an Action with its input root digest computed from the target's inputs.
 
-        An action on an ambient toolchain (not pinned in the manifest) is never cacheable: its
-        digest cannot say which tool ran it.
+        An action on a toolchain the manifest does not pin by a real digest (absent, or a
+        placeholder) is never cacheable: its digest cannot say which tool ran it. The executor
+        also reports a run as not cacheable when it used the tool on PATH instead of the pinned one.
         """
         names = tuple(toolchains) or ((self.toolchain,) if self.toolchain else ())
         pins = tuple((n, ctx.toolchain_pin(n)) for n in names)
@@ -234,14 +258,14 @@ class Adapter:
             input_root = _digest.input_root(ctx.repo, ctx.input_globs(target))
         except _digest.NoMatch as e:
             raise ContractError(f"target {target.name!r} (or a dep): {e}; fix srcs in the manifest") from None
-        cacheable = kw.pop("cacheable", target.cacheable) and all(pin != "ambient" for _, pin in pins)
+        cacheable = kw.pop("cacheable", target.cacheable) and all(ctx.toolchain_pinned(n) for n in names)
         return Action(
             target=target.name,
             capability=capability,
             name=name,
             argv=tuple(argv),
             input_root_digest=input_root,
-            env=tuple(sorted((env or {}).items())),
+            env=tuple(sorted({**ctx.env, **(env or {})}.items())),
             toolchains=pins,
             platform=kw.pop("platform", host_platform()),
             adapter=f"{self.kind}@{recipes_fingerprint()}",

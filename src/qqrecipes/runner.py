@@ -17,7 +17,7 @@ from pathlib import Path
 from xml.etree import ElementTree as ET
 
 from qqrecipes import digest
-from qqrecipes.contract import Action
+from qqrecipes.contract import KEYED_ENV_PREFIX, Action
 
 PLACEHOLDER = re.compile(r"\{(toolchain:[a-z0-9][a-z0-9._-]*|out|repo|adapter|port)\}")
 
@@ -53,7 +53,9 @@ class Env:
 
     def command(self, action: Action) -> tuple[list[str], dict[str, str], Path]:
         argv = [self.resolve(a, action.target) for a in action.argv]
-        env = dict(os.environ)  # TODO(expert): pass an allowlist, as REAPI does, for hermeticity
+        # TODO(expert): pass an allowlist, as REAPI does, for hermeticity. QQ_* settings reach the
+        # command only through the action's env, which is part of its key.
+        env = {k: v for k, v in os.environ.items() if not k.startswith(KEYED_ENV_PREFIX)}
         # A pinned toolchain's executables come first on PATH, so tools it runs find each other.
         bins = [str(Path(root).resolve() / "bin") for name, _ in action.toolchains
                 if (root := self.toolchains.get(name))]
@@ -62,6 +64,10 @@ class Env:
         env.update({k: self.resolve(v, action.target) for k, v in action.env})
         cwd = (self.repo / action.workdir).resolve()
         return argv, env, cwd
+
+    def used_pinned_toolchains(self, action: Action) -> bool:
+        """False if the action ran a toolchain from PATH because no root was given for its pin."""
+        return all(self.toolchains.get(name) for name, _ in action.toolchains)
 
 
 @dataclass(frozen=True)
@@ -72,6 +78,8 @@ class ActionResult:
     output_digests: dict[str, str | None]
     junit: Path
     log: Path
+    cacheable: bool = False  # the action is cacheable and this run used its pinned toolchains
+
 
     @property
     def ok(self) -> bool:
@@ -107,7 +115,8 @@ def run(action: Action, env: Env) -> ActionResult:
     junit = native_junit(action, env)
     if junit is None or (code != 0 and not junit_has_failures(junit)):
         junit = write_junit(action, code, duration, log, out / "junit" / f"{slug(action)}.xml")
-    return ActionResult(action.digest(), code, duration, outputs, junit, log)
+    return ActionResult(action.digest(), code, duration, outputs, junit, log,
+                        cacheable=action.cacheable and env.used_pinned_toolchains(action))
 
 
 def junit_path(action: Action, env: Env) -> Path | None:
