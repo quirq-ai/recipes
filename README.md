@@ -75,13 +75,18 @@ Plan and every v0 item: [quirq-ai/infra-config](https://github.com/quirq-ai/infr
 
 ## v0 status
 
-| Item | What | PR | State |
-|---|---|---|---|
-| V0-REC-01 | Adapter contract and loader | #2 | merged |
-| V0-REC-02 | `python-service` and `pytest` adapters | #3 | merged |
-| V0-REC-03 | `node-app` adapter (Next.js) | #4 | merged |
-| V0-REC-04 | Property tests in `test` | #5 | merged |
-| V0-REC-05 | `deploy` to a canary test environment | #6 | merged |
+| Item | What | PR | State | What CI proves today |
+|---|---|---|---|---|
+| V0-REC-01 | Adapter contract and loader | #2 | merged | unit tests, agnosticism guard, adapters match infra-config `kinds.toml` |
+| V0-REC-02 | `python-service` and `pytest` adapters | #3 | merged | xo-space's full pytest suite runs through the adapters |
+| V0-REC-03 | `node-app` adapter (Next.js) | #4 | merged | innernet installs and typechecks through the adapter (it has no tests) |
+| V0-REC-04 | Property tests in `test` | #5 | merged | a planted bug in each kind is caught, in presubmit only; running it in the gate waits on the merge queue (V0-ORG-03) |
+| V0-REC-05 | `deploy` to a canary test environment | #6 | merged | both examples, xo-space and innernet deploy, pass their probes and are torn down on the CI runner |
+
+All of this runs in this repo's presubmit, not yet in the gate. xo-space and innernet are checked
+out at pinned commits and read through `quirq-ai/sync`'s fixture manifests, not their own
+`infra/repo.toml`, until onboarding lands one in each repo (V0-ONB-01). Toolchains come from
+GitHub's setup actions at the pinned versions, not yet from `quirq-ai/toolchains`.
 
 ## Adapters
 
