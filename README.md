@@ -21,6 +21,49 @@ them. As there, the core says *what* to do with a target and the recipe says *ho
   remote executor (`quirq-ai/remote-build`).
 - The adapters replace the `interim` commands in infra-config's `kinds.toml`.
 
+## The contract
+
+```python
+from qqrecipes import loader
+from qqrecipes.contract import Adapter, Service
+
+class MyKind(Adapter):                       # qqrecipes/adapters/my_kind.py, for kind "my-kind"
+    kind = "my-kind"
+    toolchain = "some-toolchain"             # a toolchain name from infra-config kinds.toml
+    def build(self, target, ctx):            # one method per capability it implements
+        return [self.action(target, ctx, "build", "compile", ["{toolchain:some-toolchain}tool", "build"])]
+
+ADAPTER = MyKind()
+
+loader.load("my-kind").capabilities()     # {"fetch": "missing", "build": "implemented", ...}
+```
+
+- **Loader.** `loader.load(kind)` imports `qqrecipes.adapters.<kind with - as _>` and returns its
+  `ADAPTER`. Nothing registers adapters: adding a kind adds a module and edits no core file. A kind
+  with no module is `AdapterNotFound`; an adapter that fails to import raises, so a broken install
+  never looks like a missing kind.
+- **Actions.** `Action` carries the command, the input root digest (every file matched by the
+  target's `srcs` and its deps' `srcs`), environment, declared outputs, the pins of the toolchains
+  it uses, and where it writes JUnit XML. `Action.digest()` is the cache key. Commands hold
+  placeholders such as `{toolchain:NAME}` and `{out}` that the executor resolves, so the digest is
+  the same on every machine.
+- **Results.** Every action leaves JUnit XML. A step that writes none (a typecheck, a build) gets a
+  one-case report from its exit code, so the result sink (V0-TST-01) sees every step.
+- **Core stays agnostic.** Only `src/qqrecipes/adapters/<kind>` may name a language or tool.
+  `tools/agnostic_guard.py` fails CI otherwise, and CI checks that every adapter implements exactly
+  the capabilities infra-config's `kinds.toml` lists for its kind.
+
+```sh
+qqrecipes kinds                                     # adapters and their capabilities
+qqrecipes plan test --repo PATH [--json]            # the actions, without running them
+qqrecipes execute test --repo PATH [--toolchain python=ROOT]   # run them here; results in .qq/out
+qqrecipes check-kinds --infra-config PATH           # adapters agree with kinds.toml
+```
+
+`execute` is a local stand-in until `quirq-ai/remote-build` provides the executor interface
+(V0-RBE-01) and `depot` provides `qq build` and `qq test` (V0-DEP-03). Manifests are read only
+through `qqsync`, pinned by commit in `pyproject.toml`.
+
 Plan and every v0 item: [quirq-ai/infra-config](https://github.com/quirq-ai/infra-config),
 `docs/plan.md` and `docs/v0.md`.
 
@@ -28,7 +71,7 @@ Plan and every v0 item: [quirq-ai/infra-config](https://github.com/quirq-ai/infr
 
 | Item | What | PR | State |
 |---|---|---|---|
-| V0-REC-01 | Adapter contract and loader | | not started |
+| V0-REC-01 | Adapter contract and loader | #2 | in review |
 | V0-REC-02 | `python-service` and `pytest` adapters | | not started |
 | V0-REC-03 | `node-app` adapter (Next.js) | | not started |
 | V0-REC-04 | Property tests in `test` | | not started |
