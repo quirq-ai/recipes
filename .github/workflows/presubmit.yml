@@ -48,7 +48,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           repository: quirq-ai/sync
-          ref: 8f624f4a7fe3abdab2c7b83376f1ae7772073fd4
+          ref: 9f4c77ebe2c81d6ffd643d737a35b962f6fd322a
           path: .qq/sync
       - name: xo-space builds and tests through the adapters
         run: >-
