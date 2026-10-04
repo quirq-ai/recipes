@@ -53,7 +53,7 @@ def test_input_root_covers_deps_and_tracks_content(repo):
 
 def test_action_digest_includes_toolchain_pin(repo):
     a = next(p for p in plans(repo, "fetch") if p.target == "lib").actions[0]
-    assert a.toolchains[0][0] == "sh" and "sha256:0000" in a.toolchains[0][1]
+    assert a.toolchains[0][0] == "sh" and "sha256:5ca1ab1e" in a.toolchains[0][1]
 
 
 def test_ambient_toolchain_is_not_cacheable_and_platform_and_adapter_are_keyed(repo):
@@ -74,3 +74,19 @@ def test_srcs_matching_nothing_is_a_contract_error(repo):
     (repo / "infra/repo.toml").write_text(text)
     with pytest.raises(ContractError, match="'missing/\\*\\*' match no file"):
         plans(repo, "build")
+
+
+def test_placeholder_digest_is_not_cacheable(repo):
+    text = (repo / "infra/repo.toml").read_text().replace("5ca1ab1e" + "0" * 55 + "1", "0" * 64)
+    (repo / "infra/repo.toml").write_text(text)
+    a = next(p for p in plans(repo, "fetch") if p.target == "lib").actions[0]
+    assert a.toolchains[0][0] == "sh" and not a.cacheable
+
+
+def test_qq_settings_are_keyed_into_actions(repo, monkeypatch):
+    before = next(p for p in plans(repo, "fetch") if p.target == "lib").actions[0]
+    monkeypatch.setenv("QQ_PROPERTY_EXAMPLES", "7")
+    monkeypatch.setenv("QQ_TOKEN", "secret")
+    after = next(p for p in plans(repo, "fetch") if p.target == "lib").actions[0]
+    assert dict(after.env)["QQ_PROPERTY_EXAMPLES"] == "7" and "QQ_TOKEN" not in dict(after.env)
+    assert before.digest() != after.digest()

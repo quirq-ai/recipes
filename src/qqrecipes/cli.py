@@ -162,7 +162,8 @@ def cmd_execute(args) -> int:
                 failed |= not r.ok
                 print(f"{'PASS' if r.ok else 'FAIL'} {a.target} {a.capability}:{a.name}"
                       f" ({r.duration_s:.1f}s){'' if r.ok else f'  log: {r.log}'}")
-                records.append({**a.to_json(), "exit_code": r.exit_code, "duration_s": round(r.duration_s, 3),
+                records.append({**a.to_json(), "cacheable": r.cacheable, "exit_code": r.exit_code,
+                                "duration_s": round(r.duration_s, 3),
                                 "output_digests": r.output_digests, "junit": str(r.junit), "log": str(r.log)})
     finally:  # also on cancel, so a cancelled job still leaves a record
         out.mkdir(parents=True, exist_ok=True)

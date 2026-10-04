@@ -41,6 +41,24 @@ class State(StrEnum):
     MISSING = "missing"  # a declared state: the kind has no such step
 
 
+# Caller settings named QQ_PROPERTY_* (property-test bounds) reach an action only through its env, so
+# they are part of its key; the executor drops them from the ambient environment. Only this prefix, so
+# no other variable (a secret, a machine path) lands in a key or in results.json.
+KEYED_ENV_PREFIX = "QQ_PROPERTY_"
+
+
+def is_placeholder_digest(digest) -> bool:
+    """An all-zero digest stands in for a toolchain not published yet: it pins nothing."""
+    hexpart = str(digest).split(":", 1)[-1]
+    return not hexpart or set(hexpart) == {"0"}
+
+
+def _digests(pin) -> list:
+    if isinstance(pin, Mapping):
+        return [v for k, v in pin.items() if k == "digest"] + [d for v in pin.values() for d in _digests(v)]
+    return []
+
+
 class ContractError(Exception):
     """An adapter broke the contract. The message names the adapter and what to fix."""
 
@@ -77,6 +95,7 @@ class Context:
     repo: Path
     targets: Mapping[str, Target]
     toolchains: Mapping[str, Mapping] = field(default_factory=dict)  # manifest `[toolchains]`
+    env: Mapping[str, str] = field(default_factory=dict)  # the caller's QQ_PROPERTY_* settings, keyed into every action
 
     def input_globs(self, target: Target) -> tuple[str, ...]:
         """The target's own srcs plus those of every target it depends on, transitively."""
@@ -99,6 +118,11 @@ class Context:
             return "ambient"
         return json.dumps(pin, sort_keys=True, separators=(",", ":"))
 
+    def toolchain_pinned(self, name: str) -> bool:
+        """True only if the manifest pins the toolchain by real digests (none missing or all-zero)."""
+        digests = _digests(self.toolchains.get(name))
+        return bool(digests) and not any(is_placeholder_digest(d) for d in digests)
+
 
 @dataclass(frozen=True)
 class Service:
@@ -106,7 +130,16 @@ class Service:
 
     ready_path: str = "/"
     ready_timeout_s: int = 180
-    probes: tuple[str, ...] = ("/",)  # paths that must answer below HTTP 500 once ready
+    probes: tuple[str, ...] = ("/",)  # paths that must answer below HTTP 400 once ready
+
+    def __post_init__(self):
+        # The path is appended to the deployment's own URL, so it must stay a path on that host:
+        # "@example.com/" or "//example.com/" would point readiness and probes somewhere else.
+        for path in (self.ready_path, *self.probes):
+            if not isinstance(path, str) or not path.startswith("/") or path.startswith("//") \
+                    or any(ch.isspace() or ch == "\\" for ch in path):
+                raise ContractError(f"service path {path!r} must be a path on the service, starting with"
+                                    f" a single '/' and holding no whitespace or backslash")
 
 
 MEASURES = ("startup", "latency")
@@ -278,8 +311,9 @@ class Adapter:
                env: Mapping[str, str] | None = None, toolchains=(), **kw) -> Action:
         """Build an Action with its input root digest computed from the target's inputs.
 
-        An action on an ambient toolchain (not pinned in the manifest) is never cacheable: its
-        digest cannot say which tool ran it.
+        An action on a toolchain the manifest does not pin by a real digest (absent, or a
+        placeholder) is never cacheable: its digest cannot say which tool ran it. The executor
+        also reports a run as not cacheable when it used the tool on PATH instead of the pinned one.
         """
         names = tuple(toolchains) or ((self.toolchain,) if self.toolchain else ())
         pins = tuple((n, ctx.toolchain_pin(n)) for n in names)
@@ -287,14 +321,14 @@ class Adapter:
             input_root = _digest.input_root(ctx.repo, ctx.input_globs(target))
         except _digest.NoMatch as e:
             raise ContractError(f"target {target.name!r} (or a dep): {e}; fix srcs in the manifest") from None
-        cacheable = kw.pop("cacheable", target.cacheable) and all(pin != "ambient" for _, pin in pins)
+        cacheable = kw.pop("cacheable", target.cacheable) and all(ctx.toolchain_pinned(n) for n in names)
         return Action(
             target=target.name,
             capability=capability,
             name=name,
             argv=tuple(argv),
             input_root_digest=input_root,
-            env=tuple(sorted((env or {}).items())),
+            env=tuple(sorted({**ctx.env, **(env or {})}.items())),
             toolchains=pins,
             platform=kw.pop("platform", host_platform()),
             adapter=f"{self.kind}@{recipes_fingerprint()}",

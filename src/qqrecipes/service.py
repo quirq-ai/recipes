@@ -15,6 +15,7 @@ import socket
 import subprocess
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -68,9 +69,23 @@ def free_port() -> int:
         return s.getsockname()[1]
 
 
+class _SameHostRedirects(urllib.request.HTTPRedirectHandler):
+    """Follow a redirect only to the deployment itself: a probe must never pass on another host."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        old, new = urllib.parse.urlsplit(req.full_url), urllib.parse.urlsplit(newurl)
+        if (new.scheme, new.netloc) != (old.scheme, old.netloc):
+            raise urllib.error.URLError(f"HTTP {code} redirect off the deployment to {newurl}")
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+# Talk to the deployment directly: no proxy from the environment, no redirects off it.
+_OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}), _SameHostRedirects)
+
+
 def get(url: str, timeout: float = 10.0) -> tuple[int | None, str]:
     try:
-        with urllib.request.urlopen(urllib.request.Request(url, method="GET"), timeout=timeout) as r:
+        with _OPENER.open(urllib.request.Request(url, method="GET"), timeout=timeout) as r:
             return r.status, ""
     except urllib.error.HTTPError as e:
         return e.code, str(e.reason)

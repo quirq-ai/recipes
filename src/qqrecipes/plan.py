@@ -5,11 +5,12 @@ depend on, then the goal capability on the selected targets, stage by stage in d
 """
 from __future__ import annotations
 
+import os
 from collections.abc import Iterable, Mapping
 from pathlib import Path
 
 from qqrecipes import loader
-from qqrecipes.contract import CAPABILITIES, Context, ContractError, Plan, Target
+from qqrecipes.contract import CAPABILITIES, KEYED_ENV_PREFIX, Context, ContractError, Plan, Target
 
 PREPARE = ("fetch", "build")
 
@@ -22,9 +23,12 @@ def stages(goal: str) -> tuple[str, ...]:
     return PREPARE + (goal,)
 
 
-def context(manifest: Mapping, repo: Path) -> Context:
+def context(manifest: Mapping, repo: Path, environ: Mapping[str, str] | None = None) -> Context:
     targets = {t["name"]: Target.from_manifest(t) for t in manifest.get("targets", [])}
-    return Context(repo=Path(repo).resolve(), targets=targets, toolchains=manifest.get("toolchains", {}))
+    environ = os.environ if environ is None else environ
+    settings = {k: v for k, v in environ.items() if k.startswith(KEYED_ENV_PREFIX)}
+    return Context(repo=Path(repo).resolve(), targets=targets, toolchains=manifest.get("toolchains", {}),
+                   env=settings)
 
 
 def order(ctx: Context, selected: Iterable[str] | None = None) -> list[str]:

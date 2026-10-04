@@ -112,3 +112,36 @@ def test_child_ignoring_term_is_killed(tmp_path):
     assert dep.ready
     service.stop(dep, grace_s=1)
     assert dep.stopped == "killed after grace period" and not service.group_alive(dep.process.pid)
+
+
+@pytest.mark.parametrize("path", ["@example.com/", "example.com/", "//example.com/", "/a b", "/a\\b", ""])
+def test_service_paths_must_stay_on_the_service(path):
+    from qqrecipes.contract import ContractError
+    with pytest.raises(ContractError, match="must be a path on the service"):
+        Service(probes=("/", path))
+    with pytest.raises(ContractError):
+        Service(ready_path=path)
+
+
+REDIRECTOR = [sys.executable, "-c", """
+import http.server, sys
+class H(http.server.BaseHTTPRequestHandler):
+    def do_GET(self):
+        where = {"/off": "http://example.invalid/", "/on": "/ok"}.get(self.path)
+        self.send_response(302 if where else 200)
+        if where:
+            self.send_header("Location", where)
+        self.end_headers()
+    def log_message(self, *a):
+        pass
+http.server.HTTPServer(("127.0.0.1", int(sys.argv[1])), H).serve_forever()
+""", "{port}"]
+
+
+def test_probes_follow_redirects_only_on_the_deployment(tmp_path):
+    env = runner.Env(repo=tmp_path, out=tmp_path / "out")
+    dep = service.deploy_and_probe(svc(REDIRECTOR, probes=("/on", "/off")), env)
+    on, off = dep.probes
+    assert on.ok and on.status == 200
+    assert not off.ok and off.status is None and "redirect off the deployment" in off.detail
+    assert not dep.ok

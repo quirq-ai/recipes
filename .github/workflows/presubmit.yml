@@ -6,6 +6,7 @@ on:
   merge_group:
   push:
     branches: [main]
+# Every action is pinned to a full commit SHA (tag in the comment): a moved tag can't change CI.
 permissions:
   contents: read
 jobs:
@@ -13,10 +14,10 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
       # The CPython the manifests pin (3.14.8), until recipes uses the toolchain quirq-ai/toolchains
-      # publishes (V0-TCH-01). The adapters check the minor version against the manifest.
-      - uses: actions/setup-python@v7
+      # publishes (V0-TCH-01). The adapters check the full version against the manifest.
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         id: python
         with:
           python-version: "3.14.8"
@@ -25,7 +26,7 @@ jobs:
       - name: agnosticism guard (plan §5.1)
         run: python tools/agnostic_guard.py
       # Adapters must agree with the kinds infra-config declares, read with qqcfg at a pinned commit.
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           repository: quirq-ai/infra-config
           ref: a698da40d6ef9a3d79ccd9393417f094ec935123  # TODO(expert): let rollers move this pin.
@@ -39,12 +40,12 @@ jobs:
           --toolchain python="$(dirname "$(dirname "${{ steps.python.outputs.python-path }}")")"
       # V0-REC-02 done-when: xo-space builds and tests through the adapter. Its manifest is sync's
       # onboarding fixture until V0-ONB-01 lands infra/repo.toml in xo-space.
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           repository: quirq-ai/xo-space
           ref: c3cea98c8e70479b1f0cb8f871e28f8f6ee5a4f6  # TODO(expert): let rollers move this pin.
           path: .qq/xo-space
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           repository: quirq-ai/sync
           ref: 8f624f4a7fe3abdab2c7b83376f1ae7772073fd4
@@ -55,13 +56,13 @@ jobs:
           --out .qq/out/xo-space --toolchain python="$(dirname "$(dirname "${{ steps.python.outputs.python-path }}")")"
       # V0-REC-03 done-when: innernet builds and tests (typecheck: it has no tests) through the
       # adapter. Node and pnpm come from setup actions at the toolchains pins until V0-TCH-02 publishes.
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7.0.0
         with:
           node-version: "24.21.0"
-      - uses: pnpm/action-setup@v6
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86  # v6.0.10
         with:
           version: "11.28.2"  # the pnpm quirq-ai/toolchains bundles with Node 24 (V0-TCH-02)
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           repository: quirq-ai/innernet
           ref: da9b84cf811f4358e3ee0b5d9d4388b69bf481e9  # TODO(expert): let rollers move this pin.
@@ -101,7 +102,7 @@ jobs:
           qqrecipes execute bench --repo examples/python-service --target server --out .qq/out/bench-example-python --toolchain python="$(dirname "$(dirname "${{ steps.python.outputs.python-path }}")")"
           qqrecipes execute bench --repo examples/node-app --out .qq/out/bench-example-node
           cat .qq/out/bench-example-python/bench/*.json .qq/out/bench-example-node/bench/*.json
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         if: always()
         with:
           name: results

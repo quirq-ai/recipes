@@ -50,7 +50,7 @@ def test_test_goal_plan():
     plans = plan(manifest(), "test", EXAMPLE)
     fetch = actions(plans, "server", "fetch").actions
     assert [a.name for a in fetch] == ["toolchain-check", "venv", "venv-check", "install"]
-    assert fetch[0].argv[0] == "{toolchain:python}python3" and "'3.14'" in fetch[0].argv[2]
+    assert fetch[0].argv[0] == "{toolchain:python}python3" and "'3.14.8'" in fetch[0].argv[2]
     assert fetch[3].argv[-1] == "requirements.txt"
     assert actions(plans, "tests", "fetch").actions[3].argv[-1] == "requirements-dev.txt"
     build = actions(plans, "server", "build").actions[0]
@@ -92,7 +92,12 @@ def test_compile_roots(tmp_path):
     assert python_service.compile_roots(tmp_path, ["*.py", "pkg/**"]) == ["."]
 
 
-@pytest.mark.parametrize("version,ok", [(f"{sys.version_info[0]}.{sys.version_info[1]}.0", True), ("2.7.18", False)])
+HERE = "{}.{}.{}".format(*sys.version_info[:3])
+
+
+@pytest.mark.parametrize("version,ok", [(HERE, True), ("{}.{}".format(*sys.version_info[:2]), True),
+                                        ("{}.{}.{}".format(*sys.version_info[:2], sys.version_info[2] + 1), False),
+                                        ("2.7.18", False)])
 def test_toolchain_check_runs(tmp_path, version, ok):
     check = actions(plan(manifest(version=version), "fetch", EXAMPLE, ["server"]), "server", "fetch").actions[0]
     root = Path(sys.executable).parent.parent  # the running interpreter as the "toolchain"
@@ -104,7 +109,7 @@ def test_toolchain_check_runs(tmp_path, version, ok):
 
 
 def test_venv_is_rebuilt_for_another_interpreter(tmp_path):
-    fetch = actions(plan(manifest(version=f"{sys.version_info[0]}.{sys.version_info[1]}.0"), "fetch",
+    fetch = actions(plan(manifest(version=HERE), "fetch",
                          EXAMPLE, ["server"]), "server", "fetch").actions
     make = next(a for a in fetch if a.name == "venv")
     venv_dir = tmp_path / "venv"
@@ -122,3 +127,11 @@ def test_bench_plan_is_a_startup_bench_of_the_service():
     a = actions(plans, "server", "bench").actions[0]
     assert a.service is not None and a.bench.measure == "startup" and a.bench.paths == ("/health",)
     assert not a.cacheable and a.to_json()["bench"]["samples"] == 5
+
+
+@pytest.mark.parametrize("version,want", [("3.14.8", "3.14.8"), ("3.14", "3.14"), ("3.14.8rc1", "3.14"),
+                                          ("3.14.x", "3.14"), ("3", None), ("", None)])
+def test_pinned_version_falls_back_to_the_minor(version, want):
+    from qqrecipes.adapters import _python
+    from qqrecipes.contract import Context
+    assert _python.pinned_version(Context(repo=EXAMPLE, targets={}, toolchains={"python": {"version": version}})) == want

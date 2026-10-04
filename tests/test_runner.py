@@ -1,3 +1,4 @@
+import sys
 from xml.etree import ElementTree as ET
 
 from qqrecipes import runner
@@ -79,3 +80,18 @@ def test_adapter_placeholder_needs_a_package_adapter(tmp_path):
         assert "not a package" in str(e)
     else:
         raise AssertionError("expected ValueError")
+
+
+def test_ambient_qq_settings_do_not_reach_the_command(tmp_path, monkeypatch):
+    monkeypatch.setenv("QQ_PROPERTY_EXAMPLES", "7")
+    show = [sys.executable, "-c", "import os, sys; sys.exit(os.environ.get('QQ_PROPERTY_EXAMPLES', 'unset') != 'unset')"]
+    assert runner.run(act(show), runner.Env(repo=tmp_path, out=tmp_path / "out")).ok
+    keyed = act(show, env=(("QQ_PROPERTY_EXAMPLES", "7"),))
+    assert not runner.run(keyed, runner.Env(repo=tmp_path, out=tmp_path / "out")).ok
+
+
+def test_a_run_on_the_tool_from_path_is_not_cacheable(tmp_path):
+    a = act([sys.executable, "-c", "pass"], toolchains=(("py", "{pin}"),))
+    assert not runner.run(a, runner.Env(repo=tmp_path, out=tmp_path / "out")).cacheable
+    pinned = runner.Env(repo=tmp_path, out=tmp_path / "out", toolchains={"py": tmp_path})
+    assert runner.run(a, pinned).cacheable

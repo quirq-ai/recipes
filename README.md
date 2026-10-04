@@ -47,7 +47,11 @@ loader.load("my-kind").capabilities()     # {"fetch": "missing", "build": "imple
   it uses, and where it writes JUnit XML. `Action.digest()` is the cache key. Commands hold
   placeholders such as `{toolchain:NAME}` and `{out}` that the executor resolves, so the digest is
   the same on every machine of the same platform. The key also holds the platform and a
-  fingerprint of the recipes code; an action on an unpinned (ambient) toolchain is never cacheable.
+  fingerprint of the recipes code. An action on a toolchain the manifest doesn't pin by a real
+  digest (absent, or an all-zero placeholder) is never cacheable, and `results.json` marks a run
+  not cacheable when it used the tool on PATH because no `--toolchain` root was given. Today every
+  pin is a placeholder, so nothing is cacheable yet. Caller `QQ_PROPERTY_*` settings reach a command
+  only through the action's env, so they are part of the key.
   A `srcs` glob that matches no file is an error, not an empty input.
 - **Benchmarks.** `bench` returns a service action with a `Bench` spec (`params.bench`: measure
   `startup` or `latency`, paths, samples, warmup). The executor starts the service, measures,
@@ -75,13 +79,18 @@ Plan and every v0 item: [quirq-ai/infra-config](https://github.com/quirq-ai/infr
 
 ## v0 status
 
-| Item | What | PR | State |
-|---|---|---|---|
-| V0-REC-01 | Adapter contract and loader | #2 | merged |
-| V0-REC-02 | `python-service` and `pytest` adapters | #3 | merged |
-| V0-REC-03 | `node-app` adapter (Next.js) | #4 | merged |
-| V0-REC-04 | Property tests in `test` | #5 | merged |
-| V0-REC-05 | `deploy` to a canary test environment | #6 | merged |
+| Item | What | PR | State | What CI proves today |
+|---|---|---|---|---|
+| V0-REC-01 | Adapter contract and loader | #2 | merged | unit tests, agnosticism guard, adapters match infra-config `kinds.toml` |
+| V0-REC-02 | `python-service` and `pytest` adapters | #3 | merged | xo-space's full pytest suite runs through the adapters |
+| V0-REC-03 | `node-app` adapter (Next.js) | #4 | merged | innernet installs and typechecks through the adapter (it has no tests) |
+| V0-REC-04 | Property tests in `test` | #5 | merged | a planted bug in each kind is caught, in presubmit only; running it in the gate waits on the merge queue (V0-ORG-03) |
+| V0-REC-05 | `deploy` to a canary test environment | #6 | merged | both examples, xo-space and innernet deploy, pass their probes and are torn down on the CI runner |
+
+All of this runs in this repo's presubmit, not yet in the gate. xo-space and innernet are checked
+out at pinned commits and read through `quirq-ai/sync`'s fixture manifests, not their own
+`infra/repo.toml`, until onboarding lands one in each repo (V0-ONB-01). Toolchains come from
+GitHub's setup actions at the pinned versions, not yet from `quirq-ai/toolchains`.
 
 ## Adapters
 
@@ -97,12 +106,13 @@ ordinary tests in `test`, deterministic and time-boxed: the pytest adapter loads
 unless the repo picked its own profile), and the node-app adapter runs vitest with fast-check
 configured globally (seed 42, 100 runs, 5 s per property). A property cut short by its time limit
 passes with fewer runs, so a slow runner explores less. `QQ_PROPERTY_*` variables override the
-bounds; the test action's timeout bounds the whole run. `tools/check_planted_bug.py` plants an
+bounds (and so change the action key); the test action's timeout bounds the whole run. `tools/check_planted_bug.py` plants an
 input-handling bug in an example and checks a property test catches it; CI runs it for both kinds.
 
 **Deploy (V0-REC-05).** `qqrecipes execute deploy` builds each target, starts its service action
 on a free port in the canary test environment, waits until its ready path answers (below HTTP 500), runs its HTTP probes
-(status below 400 passes) and always tears it down, killing the whole process group. Start and
+(status below 400 passes) and always tears it down, killing the whole process group. Ready and
+probe paths must start with a single `/`, and readiness and probes follow redirects only within the deployment. Start and
 each probe are JUnit test cases; `results.json` records the deployment. v0's only backend is
 `local`: on GitHub, the Actions runner. `qqrecipes execute run` starts a service and keeps it up.
 CI deploys and probes both examples, xo-space and innernet.
