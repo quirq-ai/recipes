@@ -77,7 +77,7 @@ Plan and every v0 item: [quirq-ai/infra-config](https://github.com/quirq-ai/infr
 | V0-REC-02 | `python-service` and `pytest` adapters | #3 | merged |
 | V0-REC-03 | `node-app` adapter (Next.js) | #4 | merged |
 | V0-REC-04 | Property tests in `test` | #5 | merged |
-| V0-REC-05 | `deploy` to a canary test environment | #6 | in review |
+| V0-REC-05 | `deploy` to a canary test environment | #6 | merged |
 
 ## Adapters
 
