@@ -28,7 +28,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           repository: quirq-ai/infra-config
-          ref: 87fef5f89104c91822068280f6949fa36d5eee0f  # TODO(expert): let rollers move this pin.
+          ref: a698da40d6ef9a3d79ccd9393417f094ec935123  # TODO(expert): let rollers move this pin.
           path: .qq/infra-config
       - run: python -m pip install --quiet -r .qq/infra-config/requirements.txt
       - name: adapters match infra-config kinds.toml
