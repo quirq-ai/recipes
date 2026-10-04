@@ -11,7 +11,7 @@ permissions:
 jobs:
   presubmit:
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
       # The CPython the manifests pin (3.14.8), until recipes uses the toolchain quirq-ai/toolchains
@@ -53,6 +53,23 @@ jobs:
         run: >-
           qqrecipes execute test --repo .qq/xo-space --manifest .qq/sync/tests/fixtures/xo-space.repo.toml
           --out .qq/out/xo-space --toolchain python="$(dirname "$(dirname "${{ steps.python.outputs.python-path }}")")"
+      # V0-REC-03 done-when: innernet builds and tests (typecheck: it has no tests) through the
+      # adapter. Node and pnpm come from setup actions at the toolchains pins until V0-TCH-02 publishes.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24.21.0"
+      - uses: pnpm/action-setup@v6
+        with:
+          version: "11.28.2"  # the pnpm quirq-ai/toolchains bundles with Node 24 (V0-TCH-02)
+      - uses: actions/checkout@v7
+        with:
+          repository: quirq-ai/innernet
+          ref: da9b84cf811f4358e3ee0b5d9d4388b69bf481e9  # TODO(expert): let rollers move this pin.
+          path: .qq/innernet
+      - name: innernet builds and tests through the adapter
+        run: >-
+          qqrecipes execute test --repo .qq/innernet --manifest .qq/sync/tests/fixtures/innernet.repo.toml
+          --out .qq/out/innernet
       - uses: actions/upload-artifact@v7
         if: always()
         with:

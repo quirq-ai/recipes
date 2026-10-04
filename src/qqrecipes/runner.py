@@ -54,6 +54,11 @@ class Env:
     def command(self, action: Action) -> tuple[list[str], dict[str, str], Path]:
         argv = [self.resolve(a, action.target) for a in action.argv]
         env = dict(os.environ)  # TODO(expert): pass an allowlist, as REAPI does, for hermeticity
+        # A pinned toolchain's executables come first on PATH, so tools it runs find each other.
+        bins = [str(Path(root).resolve() / "bin") for name, _ in action.toolchains
+                if (root := self.toolchains.get(name))]
+        if bins:
+            env["PATH"] = os.pathsep.join([*bins, env.get("PATH", "")])
         env.update({k: self.resolve(v, action.target) for k, v in action.env})
         cwd = (self.repo / action.workdir).resolve()
         return argv, env, cwd
