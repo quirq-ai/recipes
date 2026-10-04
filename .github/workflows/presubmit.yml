@@ -84,6 +84,16 @@ jobs:
         run: >-
           python tools/check_planted_bug.py examples/node-app lib/slug.ts
           '.replace(/^-+|-+$/g, "")' '' 'always gives a safe, bounded slug'
+      # V0-REC-05 done-when: the canary pipeline can deploy and probe both kinds. v0's canary test
+      # environment is this runner: start the built artifact, probe it, tear it down.
+      - name: deploy and probe python-service (example and xo-space)
+        run: |
+          qqrecipes execute deploy --repo examples/python-service --out .qq/out/deploy-example-python --toolchain python="$(dirname "$(dirname "${{ steps.python.outputs.python-path }}")")"
+          qqrecipes execute deploy --repo .qq/xo-space --manifest .qq/sync/tests/fixtures/xo-space.repo.toml --target server --out .qq/out/deploy-xo-space --toolchain python="$(dirname "$(dirname "${{ steps.python.outputs.python-path }}")")"
+      - name: deploy and probe node-app (example and innernet)
+        run: |
+          qqrecipes execute deploy --repo examples/node-app --out .qq/out/deploy-example-node
+          qqrecipes execute deploy --repo .qq/innernet --manifest .qq/sync/tests/fixtures/innernet.repo.toml --out .qq/out/deploy-innernet
       - uses: actions/upload-artifact@v7
         if: always()
         with:
