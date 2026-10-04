@@ -53,3 +53,20 @@ def test_path_digest(tmp_path):
     (tmp_path / "d" / "f").write_text("f")
     assert digest.path_digest(tmp_path / "d").startswith("sha256:")
     assert digest.path_digest(tmp_path / "d" / "f").startswith("sha256:")
+
+
+def test_dot_slash_and_brackets():
+    assert digest.matches("./src/**", "src/a.py")
+    assert digest.matches("src/[ab].py", "src/b.py") and not digest.matches("src/[ab].py", "src/c.py")
+    assert digest.matches("src/[!a].py", "src/c.py") and not digest.matches("src/[!a].py", "src/a.py")
+
+
+def test_glob_matching_nothing_is_an_error(repo):
+    with pytest.raises(digest.NoMatch, match="'nope/\\*\\*'"):
+        digest.input_root(repo, ["lib/**", "nope/**"])
+
+
+def test_list_files_from_a_subdirectory_of_a_checkout(repo):
+    (repo / ".gitignore").write_text("lib/ignored\n")
+    (repo / "lib" / "ignored").write_text("x")
+    assert digest.list_files(repo / "lib") == ["b.txt"]

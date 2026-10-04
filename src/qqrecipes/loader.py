@@ -63,4 +63,8 @@ def available(package: str | None = None) -> list[str]:
 def adapter_dir(adapter: Adapter) -> Path:
     """The directory holding the adapter's own files: what `{adapter}` resolves to."""
     module = importlib.import_module(type(adapter).__module__)
-    return Path(module.__file__).resolve().parent
+    path = Path(module.__file__).resolve()
+    if path.name != "__init__.py":
+        raise ContractError(f"{module.__name__} uses {{adapter}} but is a single module; make it a"
+                            f" package ({module.__name__.replace('.', '/')}/__init__.py) to hold files")
+    return path.parent

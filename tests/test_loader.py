@@ -47,3 +47,8 @@ def test_missing_capability_is_a_declared_state():
 def test_real_adapters_tree_loads():
     for kind in loader.available():
         assert loader.load(kind).kind == kind
+
+
+def test_adapter_dir_only_for_package_adapters():
+    with pytest.raises(ContractError, match="single module"):
+        loader.adapter_dir(loader.load("shell-tool", FAKE))

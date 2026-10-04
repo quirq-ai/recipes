@@ -54,3 +54,23 @@ def test_input_root_covers_deps_and_tracks_content(repo):
 def test_action_digest_includes_toolchain_pin(repo):
     a = next(p for p in plans(repo, "fetch") if p.target == "lib").actions[0]
     assert a.toolchains[0][0] == "sh" and "sha256:0000" in a.toolchains[0][1]
+
+
+def test_ambient_toolchain_is_not_cacheable_and_platform_and_adapter_are_keyed(repo):
+    ps = plans(repo, "build")
+    pinned = next(p for p in ps if p.target == "lib" and p.capability == "fetch").actions[0]
+    assert pinned.cacheable
+    key = pinned.key()
+    assert dict(key["platform"])["os"] and key["adapter"].startswith("shell-tool@sha256:")
+    text = (repo / "infra/repo.toml").read_text()
+    start = text.index("[toolchains.sh]")
+    (repo / "infra/repo.toml").write_text(text[:start] + text[text.index("[[targets]]"):])
+    ambient = next(p for p in plans(repo, "fetch") if p.target == "lib").actions[0]
+    assert ambient.toolchains == (("sh", "ambient"),) and not ambient.cacheable
+
+
+def test_srcs_matching_nothing_is_a_contract_error(repo):
+    text = (repo / "infra/repo.toml").read_text().replace('srcs = ["a.txt"]', 'srcs = ["a.txt", "missing/**"]')
+    (repo / "infra/repo.toml").write_text(text)
+    with pytest.raises(ContractError, match="'missing/\\*\\*' match no file"):
+        plans(repo, "build")

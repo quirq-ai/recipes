@@ -16,13 +16,16 @@ digest is the same on every machine:
                        is ambient (on PATH; the v0 stand-in until quirq-ai/toolchains publishes it)
     {out}              the absolute results directory for this run
     {repo}             the absolute repo root
-    {adapter}          the absolute directory of the adapter's own files (`qqrecipes.adapters.<kind>`)
+    {adapter}          the absolute directory of the adapter's own files; only for an adapter that
+                       is a package (`qqrecipes/adapters/<kind>/__init__.py`)
     {port}             the port a service action listens on
 """
 from __future__ import annotations
 
 import hashlib
 import json
+import platform as _platform
+import sys
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from enum import StrEnum
@@ -118,6 +121,7 @@ class Action:
     outputs: tuple[str, ...] = ()
     junit: str | None = None  # path under {out} where the command writes JUnit XML, if it does
     toolchains: tuple[tuple[str, str], ...] = ()  # (name, pin) of each toolchain the command uses
+    adapter: str = ""  # kind@fingerprint of the recipes code that planned it, so a recipe change re-keys
     platform: tuple[tuple[str, str], ...] = ()
     cacheable: bool = True
     timeout_s: int = 1800
@@ -133,6 +137,7 @@ class Action:
             "outputs": list(self.outputs),
             "toolchains": [list(kv) for kv in self.toolchains],
             "platform": [list(kv) for kv in self.platform],
+            "adapter": self.adapter,
         }
 
     def digest(self) -> str:
@@ -155,6 +160,29 @@ class Action:
                 "probes": list(self.service.probes),
             },
         }
+
+
+def host_platform() -> tuple[tuple[str, str], ...]:
+    """REAPI-style platform properties for this machine."""
+    return (("arch", _platform.machine().lower()), ("os", sys.platform))
+
+
+def recipes_fingerprint() -> str:
+    """Digest of every file in the installed qqrecipes package.
+
+    v0 keys every action on all of recipes, so any adapter change re-runs everything.
+    TODO(expert): version and pin adapters one by one (plan §5.2) and key on that.
+    """
+    global _FINGERPRINT
+    if _FINGERPRINT is None:
+        pkg = Path(__file__).resolve().parent
+        rels = [p.relative_to(pkg).as_posix() for p in pkg.rglob("*")
+                if p.is_file() and "__pycache__" not in p.parts]
+        _FINGERPRINT = _digest.files_digest(pkg, rels)
+    return _FINGERPRINT
+
+
+_FINGERPRINT: str | None = None
 
 
 @dataclass(frozen=True)
@@ -195,16 +223,28 @@ class Adapter:
 
     def action(self, target: Target, ctx: Context, capability: str, name: str, argv, *,
                env: Mapping[str, str] | None = None, toolchains=(), **kw) -> Action:
-        """Build an Action with its input root digest computed from the target's inputs."""
+        """Build an Action with its input root digest computed from the target's inputs.
+
+        An action on an ambient toolchain (not pinned in the manifest) is never cacheable: its
+        digest cannot say which tool ran it.
+        """
         names = tuple(toolchains) or ((self.toolchain,) if self.toolchain else ())
+        pins = tuple((n, ctx.toolchain_pin(n)) for n in names)
+        try:
+            input_root = _digest.input_root(ctx.repo, ctx.input_globs(target))
+        except _digest.NoMatch as e:
+            raise ContractError(f"target {target.name!r} (or a dep): {e}; fix srcs in the manifest") from None
+        cacheable = kw.pop("cacheable", target.cacheable) and all(pin != "ambient" for _, pin in pins)
         return Action(
             target=target.name,
             capability=capability,
             name=name,
             argv=tuple(argv),
-            input_root_digest=_digest.input_root(ctx.repo, ctx.input_globs(target)),
+            input_root_digest=input_root,
             env=tuple(sorted((env or {}).items())),
-            toolchains=tuple((n, ctx.toolchain_pin(n)) for n in names),
-            cacheable=kw.pop("cacheable", target.cacheable),
+            toolchains=pins,
+            platform=kw.pop("platform", host_platform()),
+            adapter=f"{self.kind}@{recipes_fingerprint()}",
+            cacheable=cacheable,
             **kw,
         )

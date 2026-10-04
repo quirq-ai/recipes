@@ -17,8 +17,21 @@ from pathlib import Path
 SKIP_DIRS = {".git", ".qq"}  # never inputs: version control and qq's own working state
 
 
+class NoMatch(ValueError):
+    """A source glob matched no file: almost always a typo, and it would silently drop inputs."""
+
+    def __init__(self, globs: list[str]):
+        self.globs = globs
+        super().__init__(f"glob{'s' if len(globs) > 1 else ''} {', '.join(map(repr, globs))} match no file")
+
+
+def normalize(pattern: str) -> str:
+    return pattern[2:] if pattern.startswith("./") else pattern
+
+
 def _translate(pattern: str) -> re.Pattern:
     """Glob to regex. `**` spans path segments, `*` and `?` stay within one. Root-relative."""
+    pattern = normalize(pattern)
     pattern = pattern.strip("/") + ("/**" if pattern.endswith("/") else "")
     out, i = [], 0
     while i < len(pattern):
@@ -34,6 +47,11 @@ def _translate(pattern: str) -> re.Pattern:
         elif pattern[i] == "?":
             out.append("[^/]")
             i += 1
+        elif pattern[i] == "[" and "]" in pattern[i + 2:]:
+            end = pattern.index("]", i + 2)
+            body = pattern[i + 1:end]
+            out.append("[" + ("^" + re.escape(body[1:]) if body[0] == "!" else re.escape(body)) + "]")
+            i = end + 1
         else:
             out.append(re.escape(pattern[i]))
             i += 1
@@ -46,9 +64,15 @@ def matches(pattern: str, relpath: str) -> bool:
 
 
 def list_files(repo: Path) -> list[str]:
-    """Every file in the repo that could be an input: git's view if it is a checkout, else a walk."""
+    """Every file under `repo` that could be an input, relative to it.
+
+    In a git work tree (also when `repo` is a subdirectory of one) this is git's view: tracked files
+    plus untracked ones that are not ignored, so local edits are inputs too. Otherwise a walk.
+    """
     repo = Path(repo)
-    if (repo / ".git").exists():
+    inside = subprocess.run(["git", "-C", str(repo), "rev-parse", "--is-inside-work-tree"],
+                            capture_output=True, text=True, check=False)
+    if inside.returncode == 0 and inside.stdout.strip() == "true":
         r = subprocess.run(
             ["git", "-C", str(repo), "ls-files", "-z", "--cached", "--others", "--exclude-standard"],
             capture_output=True, check=False)
@@ -86,11 +110,18 @@ def files_digest(repo: Path, relpaths: Iterable[str]) -> str:
 
 
 def input_root(repo: Path, globs: Iterable[str]) -> str:
-    """Digest of every repo file matched by `globs`. No globs means an empty input root."""
+    """Digest of every repo file matched by `globs`. No globs means an empty input root.
+
+    Raises NoMatch naming every glob that matches no file.
+    """
     globs = tuple(globs)
     if not globs:
         return files_digest(repo, ())
-    return files_digest(repo, (f for f in list_files(repo) if any(matches(g, f) for g in globs)))
+    files = list_files(repo)
+    unmatched = [g for g in globs if not any(matches(g, f) for f in files)]
+    if unmatched:
+        raise NoMatch(unmatched)
+    return files_digest(repo, (f for f in files if any(matches(g, f) for g in globs)))
 
 
 def path_digest(path: Path) -> str | None:

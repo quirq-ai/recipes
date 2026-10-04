@@ -109,10 +109,15 @@ def cmd_execute(args) -> int:
     plans = _plans(args)
     repo = Path(args.repo).resolve()
     out = Path(args.out).resolve() if args.out else repo / ".qq" / "out"
-    adapter_dirs = {p.target: loader.adapter_dir(loader.load(p.kind)) for p in plans}
+    adapter_dirs = {}
+    for p in plans:
+        try:
+            adapter_dirs[p.target] = loader.adapter_dir(loader.load(p.kind))
+        except ContractError:
+            pass  # a single-module adapter; it cannot use {adapter}, and the runner says so if it does
     env = runner.Env(repo=repo, out=out, toolchains=parse_toolchains(args.toolchain),
                      adapter_dirs=adapter_dirs)
-    records, failed = [], False
+    records, failed, skipped = [], False, 0
     for p in plans:
         if p.state is State.MISSING:
             print(f"-    {p.target} {p.capability}: missing (declared)")
@@ -123,6 +128,7 @@ def cmd_execute(args) -> int:
                 break
             if a.service is not None:
                 print(f"skip {a.target} {a.capability}:{a.name}: a service; start it with deploy (V0-REC-05)")
+                skipped += 1
                 continue
             r = runner.run(a, env)
             failed |= not r.ok
@@ -132,6 +138,9 @@ def cmd_execute(args) -> int:
                             "output_digests": r.output_digests, "junit": str(r.junit), "log": str(r.log)})
     out.mkdir(parents=True, exist_ok=True)
     (out / "results.json").write_text(json.dumps(records, indent=2) + "\n")
+    if skipped and args.goal in ("run", "deploy"):
+        print(f"qqrecipes: {skipped} service action(s) not started", file=sys.stderr)
+        return 1
     return 1 if failed else 0
 
 
@@ -160,7 +169,7 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
     try:
         return args.func(args)
-    except (ManifestError, ContractError, loader.AdapterNotFound) as e:
+    except (ManifestError, ContractError, loader.AdapterNotFound, ValueError) as e:
         print(f"qqrecipes: {e}", file=sys.stderr)
         return 1
 

@@ -17,14 +17,16 @@ from pathlib import Path
 
 # Words only an adapter may say. Kept to unambiguous names: "go" or "rust" would match prose.
 BANNED = (
-    "python", "python3", "cpython", "pypy", "pip", "pipx", "venv", "virtualenv", "pytest", "unittest",
+    "python", "python3", "cpython", "pypy", "pip", "pip3", "pipx", "uv", "poetry", "tox", "venv",
+    "virtualenv", "pytest", "py.test", "unittest",
     "hypothesis", "uvicorn", "gunicorn", "django", "flask", "fastapi", "compileall",
     "node", "nodejs", "npm", "npx", "pnpm", "yarn", "corepack", "next.js", "nextjs", "typescript",
-    "javascript", "tsc", "vitest", "jest", "fast-check",
+    "javascript", "tsc", "vitest", "jest", "fast-check", "bun", "deno", "vite",
     "golang", "gotestsum", "cargo", "rustc", "jvm", "gradle", "maven", "bazel", "buck2", "pants",
-    "docker", "podman", "dockerfile", "kubectl", "helm",
+    "docker", "podman", "dockerfile", "kubernetes", "kubectl", "helm", "vercel",
 )
-WORD = re.compile(r"(?<![A-Za-z0-9_-])(" + "|".join(map(re.escape, BANNED)) + r")(?![A-Za-z0-9_-])",
+# `-` and `_` separate words, so compound names such as a kind (`python-service`) are caught too.
+WORD = re.compile(r"(?<![A-Za-z0-9])(" + "|".join(map(re.escape, BANNED)) + r")(?![A-Za-z0-9])",
                   re.IGNORECASE)
 ADAPTERS = "qqrecipes.adapters"
 

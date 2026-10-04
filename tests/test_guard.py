@@ -17,7 +17,9 @@ def test_guard_catches_a_named_tool_and_an_adapter_import(tmp_path):
     (core / "adapters" / "__init__.py").write_text("")
     (core / "adapters" / "some_kind" / "__init__.py").write_text("RUN = 'pnpm install'\n")
     (core / "bad.py").write_text("# runs pytest\nfrom qqrecipes.adapters import some_kind\n")
-    (core / "fine.py").write_text("# a pipeline; next step\n")
+    (core / "fine.py").write_text("# a pipeline; next step, a graph's nodes\n")
+    (core / "kind.py").write_text("KIND = 'python-service'\nMOD = 'node_app'\n")
     hits = guard.check(tmp_path)
-    assert len(hits) == 2
+    assert len(hits) == 4
     assert "bad.py:1: names 'pytest'" in hits[0] and "imports qqrecipes.adapters.some_kind" in hits[1]
+    assert "kind.py:1: names 'python'" in hits[2] and "kind.py:2: names 'node'" in hits[3]

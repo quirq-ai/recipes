@@ -53,3 +53,29 @@ def test_toolchain_placeholder(tmp_path):
     pinned = runner.Env(repo=tmp_path, out=tmp_path, toolchains={"sh": tmp_path / "tc"})
     assert pinned.resolve("{toolchain:sh}sh", "t") == f"{(tmp_path / 'tc').resolve()}/bin/sh"
     assert pinned.resolve("{nothing}", "t") == "{nothing}"
+
+
+def test_stale_junit_is_never_reported(tmp_path):
+    env = runner.Env(repo=tmp_path, out=tmp_path / "out")
+    (tmp_path / "out").mkdir()
+    (tmp_path / "out" / "j.xml").write_text('<testsuite><testcase name="old"><failure/></testcase></testsuite>')
+    r = runner.run(act(["true"], junit="j.xml"), env)
+    assert r.ok and r.junit.name != "j.xml"
+    assert not (tmp_path / "out" / "j.xml").exists()
+
+
+def test_relative_junit_is_under_out(tmp_path):
+    env = runner.Env(repo=tmp_path, out=tmp_path / "out")
+    r = runner.run(act(["sh", "-c", "mkdir -p \"$OUT\" && echo '<testsuite/>' > \"$OUT/r.xml\""],
+                       env=(("OUT", "{out}"),), junit="r.xml"), env)
+    assert r.junit == (tmp_path / "out" / "r.xml").resolve()
+
+
+def test_adapter_placeholder_needs_a_package_adapter(tmp_path):
+    env = runner.Env(repo=tmp_path, out=tmp_path)
+    try:
+        env.resolve("{adapter}/x", "t")
+    except ValueError as e:
+        assert "not a package" in str(e)
+    else:
+        raise AssertionError("expected ValueError")

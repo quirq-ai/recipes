@@ -43,6 +43,8 @@ class Env:
             if key == "repo":
                 return str(self.repo.resolve())
             if key == "adapter":
+                if target not in self.adapter_dirs:
+                    raise ValueError(f"{{adapter}} used by target {target!r}, whose adapter is not a package")
                 return str(self.adapter_dirs[target])
             if self.port is None:
                 raise ValueError("{port} used by an action that is not a service")
@@ -51,7 +53,7 @@ class Env:
 
     def command(self, action: Action) -> tuple[list[str], dict[str, str], Path]:
         argv = [self.resolve(a, action.target) for a in action.argv]
-        env = dict(os.environ)
+        env = dict(os.environ)  # TODO(expert): pass an allowlist, as REAPI does, for hermeticity
         env.update({k: self.resolve(v, action.target) for k, v in action.env})
         cwd = (self.repo / action.workdir).resolve()
         return argv, env, cwd
@@ -81,6 +83,9 @@ def run(action: Action, env: Env) -> ActionResult:
     (out / "junit").mkdir(parents=True, exist_ok=True)
     log = out / "logs" / f"{slug(action)}.log"
     argv, environ, cwd = env.command(action)
+    stale = junit_path(action, env)
+    if stale is not None:
+        stale.unlink(missing_ok=True)  # never report an earlier run's results as this one's
     started = time.monotonic()
     with open(log, "wb") as f:
         try:
@@ -100,11 +105,17 @@ def run(action: Action, env: Env) -> ActionResult:
     return ActionResult(action.digest(), code, duration, outputs, junit, log)
 
 
-def native_junit(action: Action, env: Env) -> Path | None:
+def junit_path(action: Action, env: Env) -> Path | None:
+    """Where the action writes JUnit; a relative path is under {out}."""
     if not action.junit:
         return None
     path = Path(env.resolve(action.junit, action.target))
-    return path if path.is_file() else None
+    return path if path.is_absolute() else env.out.resolve() / path
+
+
+def native_junit(action: Action, env: Env) -> Path | None:
+    path = junit_path(action, env)
+    return path if path is not None and path.is_file() else None
 
 
 def junit_has_failures(path: Path) -> bool:

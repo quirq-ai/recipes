@@ -46,7 +46,9 @@ loader.load("my-kind").capabilities()     # {"fetch": "missing", "build": "imple
   target's `srcs` and its deps' `srcs`), environment, declared outputs, the pins of the toolchains
   it uses, and where it writes JUnit XML. `Action.digest()` is the cache key. Commands hold
   placeholders such as `{toolchain:NAME}` and `{out}` that the executor resolves, so the digest is
-  the same on every machine.
+  the same on every machine of the same platform. The key also holds the platform and a
+  fingerprint of the recipes code; an action on an unpinned (ambient) toolchain is never cacheable.
+  A `srcs` glob that matches no file is an error, not an empty input.
 - **Results.** Every action leaves JUnit XML. A step that writes none (a typecheck, a build) gets a
   one-case report from its exit code, so the result sink (V0-TST-01) sees every step.
 - **Core stays agnostic.** Only `src/qqrecipes/adapters/<kind>` may name a language or tool.
