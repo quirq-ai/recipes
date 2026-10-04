@@ -94,6 +94,13 @@ jobs:
         run: |
           qqrecipes execute deploy --repo examples/node-app --out .qq/out/deploy-example-node
           qqrecipes execute deploy --repo .qq/innernet --manifest .qq/sync/tests/fixtures/innernet.repo.toml --out .qq/out/deploy-innernet
+      # V0-PRF-01: the bench capability measures both kinds: start-up time of the python-service
+      # example and request latency of the node-app example. The numbers land in .qq/out/bench-*/bench.
+      - name: bench python-service and node-app examples
+        run: |
+          qqrecipes execute bench --repo examples/python-service --target server --out .qq/out/bench-example-python --toolchain python="$(dirname "$(dirname "${{ steps.python.outputs.python-path }}")")"
+          qqrecipes execute bench --repo examples/node-app --out .qq/out/bench-example-node
+          cat .qq/out/bench-example-python/bench/*.json .qq/out/bench-example-node/bench/*.json
       - uses: actions/upload-artifact@v7
         if: always()
         with:

@@ -12,13 +12,16 @@ params (all optional):
     ready_path    the HTTP path that answers once the app is up (default "/")
     probes        paths a deploy probes (default: [ready_path])
     env           extra environment for build, test and run, a table of strings
+    bench         what `bench` measures: a table with measure ("latency", the default, or
+                  "startup"), paths (default: [ready_path]), samples (default 5) and warmup
+                  (default 1); see qqrecipes.contract.Bench
 """
 from __future__ import annotations
 
 import json
 from pathlib import Path
 
-from qqrecipes.contract import Adapter, ContractError, Service
+from qqrecipes.contract import Adapter, Bench, ContractError, Service
 
 TOOLCHAIN = "node"
 PNPM = "{toolchain:node}pnpm"
@@ -110,7 +113,7 @@ class NodeApp(Adapter):
                                 " or `test` script, or a tsconfig.json")
         return actions
 
-    def _service(self, target, ctx, capability):
+    def _service(self, target, ctx, capability, bench=None):
         app, _ = self._app(target, ctx)
         ready = str(target.params.get("ready_path", "/"))
         probes = target.params.get("probes", [ready])
@@ -121,13 +124,17 @@ class NodeApp(Adapter):
                 "-H", "127.0.0.1"]
         return [self.action(target, ctx, capability, "serve", argv, workdir=app,
                             env=self._env(target, PORT="{port}"), cacheable=False,
-                            service=Service(ready_path=ready, probes=probes))]
+                            service=Service(ready_path=ready, probes=probes), bench=bench)]
 
     def run(self, target, ctx):
         return self._service(target, ctx, "run")
 
     def deploy(self, target, ctx):
         return self._service(target, ctx, "deploy")
+
+    def bench(self, target, ctx):
+        spec = Bench.from_params(target, measure="latency", path=str(target.params.get("ready_path", "/")))
+        return self._service(target, ctx, "bench", bench=spec)
 
 
 ADAPTER = NodeApp()

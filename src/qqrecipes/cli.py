@@ -9,7 +9,8 @@ GOAL is a capability. The manifest is read through qqsync (default `infra/repo.t
 `execute` is the local stand-in for remote-build's executor (V0-RBE-01) and for `qq build` and
 `qq test` (V0-DEP-03); it writes JUnit XML, logs and `results.json` under --out. With GOAL
 `deploy`, each service is started in the canary test environment (--backend), probed and torn
-down (V0-REC-05); with GOAL `run`, it is started and kept up until interrupted.
+down (V0-REC-05); with GOAL `run`, it is started and kept up until interrupted; with GOAL `bench`,
+it is started, measured and torn down, and the numbers go to `bench/` under --out (V0-PRF-01).
 """
 from __future__ import annotations
 
@@ -22,7 +23,7 @@ from pathlib import Path
 from qqsync.errors import ManifestError
 from qqsync.manifest import load as load_manifest
 
-from qqrecipes import loader, runner, service
+from qqrecipes import bench, loader, runner, service
 from qqrecipes.contract import CAPABILITIES, ContractError, State
 from qqrecipes.plan import plan
 
@@ -143,6 +144,13 @@ def cmd_execute(args) -> int:
                           f" {dep.stopped}){'' if dep.ok else f'  log: {dep.log}'}")
                     records.append({**a.to_json(), "deployment": dep.to_json()})
                     continue
+                if a.bench is not None and a.capability == "bench" == args.goal:
+                    res = bench.run(a, env, args.backend)
+                    failed |= not res.ok
+                    print(f"{'PASS' if res.ok else 'FAIL'} {a.target} bench:{a.name} ({res.detail})"
+                          f"{'' if res.ok or not res.logs else f'  log: {res.logs[-1]}'}")
+                    records.append({**a.to_json(), "bench_result": res.to_json()})
+                    continue
                 if a.service is not None and a.capability == "run" == args.goal:
                     failed |= not serve_foreground(a, env, args.backend)
                     continue
@@ -159,7 +167,7 @@ def cmd_execute(args) -> int:
     finally:  # also on cancel, so a cancelled job still leaves a record
         out.mkdir(parents=True, exist_ok=True)
         (out / "results.json").write_text(json.dumps(records, indent=2) + "\n")
-    if skipped and args.goal in ("run", "deploy"):
+    if skipped and args.goal in ("run", "deploy", "bench"):
         print(f"qqrecipes: {skipped} service action(s) not started", file=sys.stderr)
         return 1
     return 1 if failed else 0

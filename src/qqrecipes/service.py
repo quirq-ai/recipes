@@ -47,6 +47,7 @@ class Deployment:
     probes: list[Probe] = field(default_factory=list)
     stopped: str = ""
     process: subprocess.Popen | None = None
+    poll_s: float = 0.5  # how often readiness is checked; a bench timing a start polls faster
 
     @property
     def ok(self) -> bool:
@@ -77,7 +78,7 @@ def get(url: str, timeout: float = 10.0) -> tuple[int | None, str]:
         return None, str(getattr(e, "reason", e))
 
 
-def start(action: Action, env: Env, backend: str = "local") -> Deployment:
+def start(action: Action, env: Env, backend: str = "local", poll_s: float = 0.5) -> Deployment:
     if backend not in BACKENDS:
         raise ValueError(f"unknown deploy backend {backend!r}; v0 has {', '.join(BACKENDS)}")
     if action.service is None:
@@ -87,7 +88,7 @@ def start(action: Action, env: Env, backend: str = "local") -> Deployment:
     argv, environ, cwd = penv.command(action)
     (env.out / "logs").mkdir(parents=True, exist_ok=True)
     log = env.out.resolve() / "logs" / f"{slug(action)}.log"
-    dep = Deployment(action, backend, f"http://{HOST}:{port}", log)
+    dep = Deployment(action, backend, f"http://{HOST}:{port}", log, poll_s=poll_s)
     with open(log, "wb") as f:
         try:
             dep.process = subprocess.Popen(argv, cwd=cwd, env=environ, stdout=f, stderr=subprocess.STDOUT,
@@ -116,7 +117,7 @@ def wait_ready(dep: Deployment) -> None:
         if status is not None and status < 500:
             dep.ready, dep.ready_detail = True, f"{svc.ready_path} answered {status}"
             return
-        time.sleep(0.5)
+        time.sleep(dep.poll_s)
     dep.ready_detail = f"{svc.ready_path} did not answer within {svc.ready_timeout_s}s"
 
 

@@ -49,6 +49,10 @@ loader.load("my-kind").capabilities()     # {"fetch": "missing", "build": "imple
   the same on every machine of the same platform. The key also holds the platform and a
   fingerprint of the recipes code; an action on an unpinned (ambient) toolchain is never cacheable.
   A `srcs` glob that matches no file is an error, not an empty input.
+- **Benchmarks.** `bench` returns a service action with a `Bench` spec (`params.bench`: measure
+  `startup` or `latency`, paths, samples, warmup). The executor starts the service, measures,
+  tears it down, and writes the raw samples and summary metrics, each with a unit, to
+  `{out}/bench/` plus one JUnit case. quirq-ai/perf stores them as Results (V0-PRF-01).
 - **Results.** Every action leaves JUnit XML. A step that writes none (a typecheck, a build) gets a
   one-case report from its exit code, so the result sink (V0-TST-01) sees every step.
 - **Core stays agnostic.** Only `src/qqrecipes/adapters/<kind>` may name a language or tool.
@@ -83,9 +87,9 @@ Plan and every v0 item: [quirq-ai/infra-config](https://github.com/quirq-ai/infr
 
 | Kind | Capabilities | Toolchain | Notes |
 |---|---|---|---|
-| `python-service` | fetch, build, run, deploy | python | venv in `.qq/venv` from the pinned CPython; build byte-compiles srcs; run/deploy emit a service action for `params.entry` listening on `$PORT` (`params.port_env`), which `deploy` starts and probes (V0-REC-05) |
+| `python-service` | fetch, build, run, deploy, bench | python | venv in `.qq/venv` from the pinned CPython; build byte-compiles srcs; run/deploy emit a service action for `params.entry` listening on `$PORT` (`params.port_env`), which `deploy` starts and probes (V0-REC-05); bench times start-up (`params.bench`, V0-PRF-01) |
 | `pytest` | fetch, test | python | installs `requirements-dev.txt`; writes JUnit XML to `{out}/junit/<target>.pytest.xml` |
-| `node-app` | fetch, build, test, run, deploy | node (bundles pnpm) | `pnpm install --frozen-lockfile`; build runs the `build` script; test runs `typecheck` (or `tsc --noEmit`), then vitest with JUnit or the `test` script; run/deploy use `next start` |
+| `node-app` | fetch, build, test, run, deploy, bench | node (bundles pnpm) | `pnpm install --frozen-lockfile`; build runs the `build` script; test runs `typecheck` (or `tsc --noEmit`), then vitest with JUnit or the `test` script; run/deploy use `next start`; bench times GETs of `params.bench.paths` once it is up (V0-PRF-01) |
 
 **Property tests (V0-REC-04).** Hypothesis (Python) and fast-check (TypeScript) tests run as
 ordinary tests in `test`, deterministic and time-boxed: the pytest adapter loads its

@@ -49,7 +49,7 @@ def step(plans, capability):
 
 def test_capabilities_match_kinds_toml():
     caps = loader.load("node-app").capabilities()
-    assert {c for c, s in caps.items() if s is State.IMPLEMENTED} == {"fetch", "build", "test", "run", "deploy"}
+    assert {c for c, s in caps.items() if s is State.IMPLEMENTED} == {"fetch", "build", "test", "run", "deploy", "bench"}
 
 
 def test_innernet_shape(app):
@@ -130,3 +130,15 @@ def test_outs_are_relative_to_the_app_dir(tmp_path):
     m["targets"][0]["srcs"] = ["web/**"]
     acts = plan(m, "build", tmp_path)
     assert next(p for p in acts if p.capability == "build").actions[0].outputs == (".next",)
+
+
+def test_bench_is_a_latency_bench_of_the_app(app):
+    repo = app()
+    m = manifest('params = { env = { INNERNET_DEMO = "1" }, bench = { paths = ["/search?q=qq"], samples = 20 } }')
+    plans = plan(m, "bench", repo)
+    assert [p.capability for p in plans] == ["fetch", "build", "bench"]
+    a = step(plans, "bench").actions[0]
+    assert a.service is not None and dict(a.env)["INNERNET_DEMO"] == "1"
+    assert (a.bench.measure, a.bench.paths, a.bench.samples) == ("latency", ("/search?q=qq",), 20)
+    with pytest.raises(ContractError, match="params.bench"):
+        plan(manifest('params = { bench = { measure = "memory" } }'), "bench", repo)

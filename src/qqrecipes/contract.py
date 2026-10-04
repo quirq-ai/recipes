@@ -109,6 +109,50 @@ class Service:
     probes: tuple[str, ...] = ("/",)  # paths that must answer below HTTP 500 once ready
 
 
+MEASURES = ("startup", "latency")
+
+
+@dataclass(frozen=True)
+class Bench:
+    """Marks a service action as a benchmark (`bench`) and says what to measure (V0-PRF-01).
+
+    startup  seconds from starting the service until its ready path answers, over `samples` starts
+    latency  milliseconds per GET of each of `paths` once the service is ready, `samples` rounds
+
+    The first `warmup` starts or rounds are not counted. Numbers are raw: quirq-ai/perf stores
+    them with units and the runner type, and comparing them is v1's job.
+    """
+
+    measure: str = "latency"
+    paths: tuple[str, ...] = ("/",)
+    samples: int = 5
+    warmup: int = 1
+
+    @classmethod
+    def from_params(cls, target: Target, *, measure: str, path: str) -> Bench:
+        """`params.bench` of a target: a table with optional measure, paths, samples and warmup."""
+        raw = target.params.get("bench", {})
+        where = f"target {target.name!r} ({target.kind}): params.bench"
+        if not isinstance(raw, Mapping):
+            raise ContractError(f"{where} must be a table")
+        unknown = set(raw) - {"measure", "paths", "samples", "warmup"}
+        if unknown:
+            raise ContractError(f"{where} has unknown keys {sorted(unknown)}; known: measure, paths,"
+                                " samples, warmup")
+        measure = raw.get("measure", measure)
+        if measure not in MEASURES:
+            raise ContractError(f"{where}.measure is {measure!r}; one of {', '.join(MEASURES)}")
+        paths = raw.get("paths", [path])
+        if not isinstance(paths, list) or not paths or not all(
+                isinstance(p, str) and p.startswith("/") for p in paths):
+            raise ContractError(f"{where}.paths must be a non-empty list of paths starting with /")
+        samples, warmup = raw.get("samples", cls.samples), raw.get("warmup", cls.warmup)
+        for key, value, low in (("samples", samples, 1), ("warmup", warmup, 0)):
+            if not isinstance(value, int) or isinstance(value, bool) or not low <= value <= 1000:
+                raise ContractError(f"{where}.{key} must be a whole number from {low} to 1000")
+        return cls(measure=measure, paths=tuple(paths), samples=samples, warmup=warmup)
+
+
 @dataclass(frozen=True)
 class Action:
     target: str
@@ -126,6 +170,7 @@ class Action:
     cacheable: bool = True
     timeout_s: int = 1800
     service: Service | None = None
+    bench: Bench | None = None  # with a service: what the `bench` capability measures on it
 
     def key(self) -> dict:
         """What identifies the action: everything but labels. Hash it for the action digest."""
@@ -158,6 +203,12 @@ class Action:
                 "ready_path": self.service.ready_path,
                 "ready_timeout_s": self.service.ready_timeout_s,
                 "probes": list(self.service.probes),
+            },
+            "bench": None if self.bench is None else {
+                "measure": self.bench.measure,
+                "paths": list(self.bench.paths),
+                "samples": self.bench.samples,
+                "warmup": self.bench.warmup,
             },
         }
 
