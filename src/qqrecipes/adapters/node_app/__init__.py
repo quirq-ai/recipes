@@ -58,9 +58,9 @@ class NodeApp(Adapter):
             check = (f"const m = process.versions.node.split('.')[0];"
                      f" if (m !== '{major}') {{ console.error('pinned Node {major}, found ' + m); process.exit(1); }}")
             actions.append(self.action(target, ctx, "fetch", "toolchain-check", [NODE, "-e", check], workdir=app))
-        if not (Path(ctx.repo) / app / "pnpm-lock.yaml").is_file():
-            raise ContractError(f"target {target.name!r} (node-app): no pnpm-lock.yaml in {app!r};"
-                                " commit one so installs are pinned")
+        if not any((Path(ctx.repo) / d / "pnpm-lock.yaml").is_file() for d in (app, ".")):
+            raise ContractError(f"target {target.name!r} (node-app): no pnpm-lock.yaml in {app!r} or the"
+                                " repo root; commit one so installs are pinned")
         # pnpm 11 refuses unapproved dependency build scripts; skip them with a warning, as pnpm 10
         # did, matching the toolchain's own smoke test. TODO(expert): repos list approved builds.
         actions.append(self.action(target, ctx, "fetch", "install",
@@ -72,8 +72,11 @@ class NodeApp(Adapter):
         app, package = self._app(target, ctx)
         if "build" not in package.get("scripts", {}):
             raise ContractError(f"target {target.name!r} (node-app): package.json has no `build` script")
+        # Outputs are relative to the workdir (the app dir); manifest outs are repo-relative.
+        outs = [str(Path(o).relative_to(app)) if app != "." and Path(o).is_relative_to(app) else o
+                for o in target.outs]
         return [self.action(target, ctx, "build", "build", [PNPM, "run", "build"], workdir=app,
-                            env=self._env(target), outputs=tuple(target.outs) or (".next",))]
+                            env=self._env(target), outputs=tuple(outs) or (".next",))]
 
     def test(self, target, ctx):
         app, package = self._app(target, ctx)
@@ -103,7 +106,10 @@ class NodeApp(Adapter):
     def _service(self, target, ctx, capability):
         app, _ = self._app(target, ctx)
         ready = str(target.params.get("ready_path", "/"))
-        probes = tuple(target.params.get("probes", [ready]))
+        probes = target.params.get("probes", [ready])
+        if not isinstance(probes, list) or not all(isinstance(p, str) for p in probes):
+            raise ContractError(f"target {target.name!r} (node-app): params.probes must be a list of paths")
+        probes = tuple(probes)
         argv = [PNPM, "exec", "next", "start", str(target.params.get("port_flag", "-p")), "{port}",
                 "-H", "127.0.0.1"]
         return [self.action(target, ctx, capability, "serve", argv, workdir=app,

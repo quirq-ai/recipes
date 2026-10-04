@@ -57,7 +57,7 @@ jobs:
       # adapter. Node and pnpm come from setup actions at the toolchains pins until V0-TCH-02 publishes.
       - uses: actions/setup-node@v7
         with:
-          node-version: "24"
+          node-version: "24.21.0"
       - uses: pnpm/action-setup@v6
         with:
           version: "11.28.2"  # the pnpm quirq-ai/toolchains bundles with Node 24 (V0-TCH-02)

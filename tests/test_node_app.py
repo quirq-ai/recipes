@@ -114,3 +114,19 @@ def test_pinned_toolchain_bin_goes_first_on_path(tmp_path):
                toolchains=(("node", "pin"),))
     _, environ, _ = env.command(a)
     assert environ["PATH"].split(":")[0] == str((tmp_path / "tc" / "bin").resolve())
+
+
+def test_probes_must_be_a_list(app):
+    with pytest.raises(ContractError, match="params.probes"):
+        plan(manifest('params = { probes = "/health" }'), "deploy", app())
+
+
+def test_outs_are_relative_to_the_app_dir(tmp_path):
+    (tmp_path / "web" / "app").mkdir(parents=True)
+    (tmp_path / "web" / "app" / "page.tsx").write_text("")
+    (tmp_path / "web" / "package.json").write_text(json.dumps({"scripts": {"build": "next build"}}))
+    (tmp_path / "pnpm-lock.yaml").write_text("")  # workspace lockfile at the root
+    m = manifest('params = { dir = "web" }\nouts = ["web/.next/"]')
+    m["targets"][0]["srcs"] = ["web/**"]
+    acts = plan(m, "build", tmp_path)
+    assert next(p for p in acts if p.capability == "build").actions[0].outputs == (".next",)

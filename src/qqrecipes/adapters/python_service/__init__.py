@@ -50,7 +50,10 @@ class PythonService(Adapter):
         if not entry:
             raise ContractError(f"target {target.name!r} (python-service): no entry script; set params.entry")
         ready = str(target.params.get("ready_path", "/"))
-        probes = tuple(target.params.get("probes", [ready]))
+        probes = target.params.get("probes", [ready])
+        if not isinstance(probes, list) or not all(isinstance(p, str) for p in probes):
+            raise ContractError(f"target {target.name!r} (python-service): params.probes must be a list of paths")
+        probes = tuple(probes)
         env = {str(target.params.get("port_env", "PORT")): "{port}", "PYTHONUNBUFFERED": "1"}
         return [self.action(target, ctx, capability, "serve", [_python.VENV_PYTHON, entry], env=env,
                             cacheable=False, service=Service(ready_path=ready, probes=probes))]
