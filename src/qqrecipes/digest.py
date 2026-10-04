@@ -50,7 +50,12 @@ def _translate(pattern: str) -> re.Pattern:
         elif pattern[i] == "[" and "]" in pattern[i + 2:]:
             end = pattern.index("]", i + 2)
             body = pattern[i + 1:end]
-            out.append("[" + ("^" + re.escape(body[1:]) if body[0] == "!" else re.escape(body)) + "]")
+            negate = body.startswith("!")
+            body = body[1:] if negate else body
+            # Escape each character but keep an interior `-` as a range, as fnmatch does.
+            cls = "".join("-" if c == "-" and 0 < k < len(body) - 1 else re.escape(c)
+                          for k, c in enumerate(body))
+            out.append("[" + ("^" if negate else "") + cls + "]")
             i = end + 1
         else:
             out.append(re.escape(pattern[i]))

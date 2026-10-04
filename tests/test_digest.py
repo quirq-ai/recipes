@@ -59,6 +59,8 @@ def test_dot_slash_and_brackets():
     assert digest.matches("./src/**", "src/a.py")
     assert digest.matches("src/[ab].py", "src/b.py") and not digest.matches("src/[ab].py", "src/c.py")
     assert digest.matches("src/[!a].py", "src/c.py") and not digest.matches("src/[!a].py", "src/a.py")
+    assert digest.matches("src/[a-c].py", "src/b.py") and not digest.matches("src/[a-c].py", "src/d.py")
+    assert digest.matches("src/[-a].py", "src/-.py") and not digest.matches("src/[!a-c].py", "src/b.py")
 
 
 def test_glob_matching_nothing_is_an_error(repo):
