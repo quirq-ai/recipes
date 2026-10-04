@@ -1,0 +1,22 @@
+# A minimal python-service + pytest repo, built and tested through the adapters in CI.
+schema = "quirq-repo/1"
+
+[qq]
+version = "0.1.0"
+
+[toolchains.python]
+version = "3.14.8"   # placeholder digest until quirq-ai/toolchains publishes CPython (V0-TCH-01)
+source = "https://github.com/quirq-ai/toolchains/releases/download/python-3.14.8/python-3.14.8-linux-x86_64.tar.zst"
+digest = "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+
+[[targets]]
+name = "server"
+kind = "python-service"
+srcs = ["server.py", "greet.py", "requirements.txt"]
+params = { ready_path = "/health", probes = ["/health", "/greet?name=qq"] }
+
+[[targets]]
+name = "tests"
+kind = "pytest"
+srcs = ["tests/**", "requirements-dev.txt"]
+deps = ["server"]
