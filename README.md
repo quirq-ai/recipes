@@ -19,7 +19,8 @@ them. As there, the core says *what* to do with a target and the recipe says *ho
   root digest, platform properties and an environment, producing output digests, an exit code and
   test results (JUnit XML). The same action runs locally, on a GitHub Actions runner, or later on a
   remote executor (`quirq-ai/remote-build`).
-- The adapters replace the `interim` commands in infra-config's `kinds.toml`.
+- The adapters are meant to replace the `interim` commands in infra-config's `kinds.toml`. Product
+  CI does not run them yet: the workflows infra-config generates still run those `interim` commands.
 
 ## The contract
 
@@ -49,8 +50,8 @@ loader.load("my-kind").capabilities()     # {"fetch": "missing", "build": "imple
   the same on every machine of the same platform. The key also holds the platform and a
   fingerprint of the recipes code. An action on a toolchain the manifest doesn't pin by a real
   digest (absent, or an all-zero placeholder) is never cacheable, and `results.json` marks a run
-  not cacheable when it used the tool on PATH because no `--toolchain` root was given. Today every
-  pin is a placeholder, so nothing is cacheable yet. Caller `QQ_PROPERTY_*` settings reach a command
+  not cacheable when it used the tool on PATH because no `--toolchain` root was given. The
+  examples' pins are still placeholders, so their actions are never cacheable. Caller `QQ_PROPERTY_*` settings reach a command
   only through the action's env, so they are part of the key.
   A `srcs` glob that matches no file is an error, not an empty input.
 - **Benchmarks.** `bench` returns a service action with a `Bench` spec (`params.bench`: measure
@@ -70,8 +71,9 @@ qqrecipes execute test --repo PATH [--toolchain python=ROOT]   # run them here; 
 qqrecipes check-kinds --infra-config PATH           # adapters agree with kinds.toml
 ```
 
-`execute` is a local stand-in until `quirq-ai/remote-build` provides the executor interface
-(V0-RBE-01) and `depot` provides `qq build` and `qq test` (V0-DEP-03). Manifests are read only
+`execute` runs actions on this machine; `quirq-ai/remote-build` holds the executor interface
+(V0-RBE-01), which nothing calls yet. `depot`'s `qq build` and `qq test` (V0-DEP-03) run the same
+plan through this package. Manifests are read only
 through `qqsync`, pinned by commit in `pyproject.toml`.
 
 Plan and every v0 item: [quirq-ai/infra-config](https://github.com/quirq-ai/infra-config),
@@ -84,12 +86,12 @@ Plan and every v0 item: [quirq-ai/infra-config](https://github.com/quirq-ai/infr
 | V0-REC-01 | Adapter contract and loader | #2 | merged | unit tests, agnosticism guard, adapters match infra-config `kinds.toml` |
 | V0-REC-02 | `python-service` and `pytest` adapters | #3 | merged | xo-space's full pytest suite runs through the adapters |
 | V0-REC-03 | `node-app` adapter (Next.js) | #4 | merged | innernet installs and typechecks through the adapter (it has no tests) |
-| V0-REC-04 | Property tests in `test` | #5 | merged | a planted bug in each kind is caught, in presubmit only; running it in the gate waits on the merge queue (V0-ORG-03) |
+| V0-REC-04 | Property tests in `test` | #5 | merged | a planted bug in each kind is caught, in this repo's presubmit only; product CI does not run recipes yet |
 | V0-REC-05 | `deploy` to a canary test environment | #6 | merged | both examples, xo-space and innernet deploy, pass their probes and are torn down on the CI runner |
 
 All of this runs in this repo's presubmit, not yet in the gate. xo-space and innernet are checked
 out at pinned commits and read through `quirq-ai/sync`'s fixture manifests, not their own
-`infra/repo.toml`, until onboarding lands one in each repo (V0-ONB-01). Toolchains come from
+`infra/repo.toml` (both repos have one now, but this presubmit does not read it). Toolchains come from
 GitHub's setup actions at the pinned versions, not yet from `quirq-ai/toolchains`.
 
 ## Adapters
@@ -116,6 +118,9 @@ probe paths must start with a single `/`, and readiness and probes follow redire
 each probe are JUnit test cases; `results.json` records the deployment. v0's only backend is
 `local`: on GitHub, the Actions runner. `qqrecipes execute run` starts a service and keeps it up.
 CI deploys and probes both examples, xo-space and innernet.
+
+infra-config's `kinds.toml` also lists `gatsby-site`, `static-docs` and `container-image`, which
+have no adapter yet (`qqrecipes check-kinds` notes each one).
 
 Each adapter's docstring lists its `params`. `examples/` holds small repos that CI builds and tests
 through the adapters, and CI also runs xo-space's pytest suite and innernet's build and typecheck through them.
