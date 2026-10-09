@@ -11,7 +11,7 @@ requires-python = ">=3.11"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
 # sync is used by pinned commit (main after V0-SYN-04, quirq-ai/sync#5); depot pins the same one. TODO(expert): let rollers move this pin.
-dependencies = ["qqsync @ git+https://github.com/quirq-ai/sync@9f4c77ebe2c81d6ffd643d737a35b962f6fd322a"]
+dependencies = ["qqsync @ git+https://github.com/quirq-ai/sync@aecb0fdb89f0d88b61a26052f5b3c26c48392841"]
 
 [project.optional-dependencies]
 test = ["pytest==9.1.1"]
