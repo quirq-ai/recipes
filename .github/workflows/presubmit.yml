@@ -43,7 +43,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           repository: quirq-ai/xo-space
-          ref: c3cea98c8e70479b1f0cb8f871e28f8f6ee5a4f6  # TODO(expert): let rollers move this pin.
+          ref: 3bb8687307144ab604723e7c13f49753b22dc0e0  # TODO(expert): let rollers move this pin.
           path: .qq/xo-space
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
