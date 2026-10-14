@@ -11,7 +11,7 @@ requires-python = ">=3.11"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
 # sync is used by pinned commit (the commit that adds `qqsync project`); qq pins the same one. TODO(expert): let rollers move this pin.
-dependencies = ["qqsync @ git+https://github.com/quirq-ai/sync@6fd1dd5b861cbbaa4a70337a6983e28ee7b07a6c"]
+dependencies = ["qqsync @ git+https://github.com/quirq-ai/sync@9821f745690d5150cac70cd2eee54c97d431e6c3"]
 
 [project.optional-dependencies]
 test = ["pytest==9.1.1"]
